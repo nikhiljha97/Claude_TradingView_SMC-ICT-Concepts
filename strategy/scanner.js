@@ -28,16 +28,15 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
 function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); }
 
-function isMarketOpen(pair, now = new Date()) {
-  if (pair.alwaysOpen) return true;
-  // XAUUSD: closed Friday 17:00 ET → Sunday 18:00 ET
-  // Approximate using local time (user said "Sunday 6PM to Friday 5PM")
-  const day = now.getDay();   // 0=Sun, 5=Fri, 6=Sat
-  const hour = now.getHours();
-  if (day === 6) return false;                         // all of Saturday closed
-  if (day === 5 && hour >= 17) return false;           // Fri after 5pm
-  if (day === 0 && hour < 18) return false;            // Sun before 6pm
-  return true;
+function isWeekendSession(now = new Date()) {
+  // Weekend session: Fri 17:00 EST → Sun 18:00 EST (crypto-only watchlist)
+  const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day  = est.getDay();   // 0=Sun, 5=Fri, 6=Sat
+  const hour = est.getHours();
+  if (day === 6) return true;                  // all Saturday
+  if (day === 5 && hour >= 17) return true;    // Fri after 5pm EST
+  if (day === 0 && hour < 18) return true;     // Sun before 6pm EST
+  return false;
 }
 
 async function processFeedback(config, weights) {
@@ -172,14 +171,13 @@ async function main() {
     console.error(`[scanner] Telegram feedback error: ${e.message}`);
   }
 
-  // 2. Scan each pair
-  const now = new Date();
+  // 2. Pick watchlist based on session (weekday forex/indices vs weekend crypto)
+  const weekend = isWeekendSession();
+  const pairs = weekend ? config.weekendPairs : config.weekdayPairs;
+  console.log(`[scanner] Session: ${weekend ? 'WEEKEND (crypto)' : 'WEEKDAY (forex/indices/crypto)'} — ${pairs.length} pairs`);
+
   const alerts = [];
-  for (const pair of config.pairs) {
-    if (!isMarketOpen(pair, now)) {
-      console.log(`[scanner] ${pair.symbol} market closed — skipping.`);
-      continue;
-    }
+  for (const pair of pairs) {
     try {
       const sig = await scanSymbol(pair, config, weights);
       if (sig) alerts.push(sig);

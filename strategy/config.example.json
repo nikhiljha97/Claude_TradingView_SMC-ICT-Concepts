@@ -4,17 +4,27 @@
     "chat_id": null,
     "last_update_id": 0
   },
-  "pairs": [
-    { "symbol": "BTCUSDT", "name": "Bitcoin", "alwaysOpen": true },
-    { "symbol": "ETHUSDT", "name": "Ethereum", "alwaysOpen": true },
-    { "symbol": "XRPUSDT", "name": "XRP", "alwaysOpen": true },
-    { "symbol": "SOLUSDT", "name": "Solana", "alwaysOpen": true },
-    {
-      "symbol": "XAUUSD",
-      "name": "Gold",
-      "alwaysOpen": false,
-      "marketOpen": { "dayOpen": 0, "hourOpen": 18, "dayClose": 5, "hourClose": 17 }
-    }
+  "weekdayPairs": [
+    { "symbol": "EURUSD",  "name": "Euro/Dollar" },
+    { "symbol": "GBPUSD",  "name": "Cable" },
+    { "symbol": "USDCAD",  "name": "Dollar/CAD" },
+    { "symbol": "EURCAD",  "name": "Euro/CAD" },
+    { "symbol": "GBPCAD",  "name": "Cable/CAD" },
+    { "symbol": "XAUUSD",  "name": "Gold" },
+    { "symbol": "NAS100",  "name": "Nasdaq 100" },
+    { "symbol": "SPX500",  "name": "S&P 500" },
+    { "symbol": "US30",    "name": "Dow Jones" },
+    { "symbol": "USOIL",   "name": "WTI Crude" },
+    { "symbol": "BTCUSDT", "name": "Bitcoin" },
+    { "symbol": "USDJPY",  "name": "Dollar/Yen" },
+    { "symbol": "GBPJPY",  "name": "Cable/Yen" }
+  ],
+  "weekendPairs": [
+    { "symbol": "BTCUSDT", "name": "Bitcoin" },
+    { "symbol": "ETHUSDT", "name": "Ethereum" },
+    { "symbol": "XRPUSDT", "name": "XRP" },
+    { "symbol": "SOLUSDT", "name": "Solana" },
+    { "symbol": "ETCUSDT", "name": "Ethereum Classic" }
   ],
   "strategy": {
     "minRR": 2.5,
