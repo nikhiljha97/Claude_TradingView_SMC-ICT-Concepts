@@ -4,3 +4,7 @@ scripts/current.pine
 temp_*
 *.log
 discovery-log.json
+strategy/config.json
+strategy/trades.json
+strategy/weights.json
+.claude/

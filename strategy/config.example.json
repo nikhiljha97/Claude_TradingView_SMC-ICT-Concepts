@@ -1,0 +1,43 @@
+{
+  "telegram": {
+    "token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "chat_id": null,
+    "last_update_id": 0
+  },
+  "pairs": [
+    { "symbol": "BTCUSDT", "name": "Bitcoin", "alwaysOpen": true },
+    { "symbol": "ETHUSDT", "name": "Ethereum", "alwaysOpen": true },
+    { "symbol": "XRPUSDT", "name": "XRP", "alwaysOpen": true },
+    { "symbol": "SOLUSDT", "name": "Solana", "alwaysOpen": true },
+    {
+      "symbol": "XAUUSD",
+      "name": "Gold",
+      "alwaysOpen": false,
+      "marketOpen": { "dayOpen": 0, "hourOpen": 18, "dayClose": 5, "hourClose": 17 }
+    }
+  ],
+  "strategy": {
+    "minRR": 2.5,
+    "alertScoreThreshold": 6.5,
+    "atrMultiplierSL": 1.5,
+    "swingLookback": 10,
+    "fvgMinSizePercent": 0.05,
+    "pivotConfluencePercent": 0.3,
+    "htfBarsToFetch": 100,
+    "entryBarsToFetch": 50,
+    "cdpWaitMs": 2000
+  },
+  "weights": {
+    "htfAlignment": 2.5,
+    "orderBlockFVG": 2,
+    "liquiditySweep": 2,
+    "structureConfirm": 1.5,
+    "pivotConfluence": 1,
+    "rrBonus": 1,
+    "ictKillzone": 1.0,
+    "ictOTE": 0.75,
+    "ictNDOG": 0.5,
+    "dailyBias": 0.5,
+    "weeklyTemplate": 0.5
+  }
+}
