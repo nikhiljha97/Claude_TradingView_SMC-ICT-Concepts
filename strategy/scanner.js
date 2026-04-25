@@ -78,9 +78,11 @@ async function processFeedback(config, weights) {
     if (conf) {
       const result = applyConfirmation(conf.tradeId, conf.took);
       if (result.ok) {
+        const t = result.trade;
+        const pair = `${t.symbol} ${t.direction}`;
         const reply = conf.took
-          ? `✅ \`${conf.tradeId}\` marked as *taken* — cooldown active, won't re-alert this setup.\nReply \`TP HIT ${conf.tradeId}\` or \`SL HIT ${conf.tradeId}\` when done.`
-          : `⏭ \`${conf.tradeId}\` marked as *skipped* — will re-alert if setup holds next cycle.`;
+          ? `✅ *${pair}* \`${conf.tradeId}\` marked as *taken* — cooldown active, won't re-alert this setup.\nReply \`TP HIT ${conf.tradeId}\` or \`SL HIT ${conf.tradeId}\` when done.`
+          : `⏭ *${pair}* \`${conf.tradeId}\` marked as *skipped* — will re-alert if setup holds next cycle.`;
         await sendMessage(config.telegram.token, msg.chat.id, reply);
       } else {
         await sendMessage(config.telegram.token, msg.chat.id, `⚠️ ${result.error}`);
