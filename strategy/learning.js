@@ -114,6 +114,8 @@ export function logAlert(signal) {
     score: signal.score,
     maxScore: signal.maxScore,
     breakdown: signal.breakdown,
+    setupFingerprint: signal.setupFingerprint,
+    htfAlignment: signal.htfAlignment,
     activeComponents: Object.keys(signal.breakdown).filter(k => signal.breakdown[k] > 0),
     confirmed: null, // null=awaiting, true=took trade, false=skipped
     outcome: null,   // 'TP' | 'SL' | null

@@ -67,6 +67,10 @@ strategy/
 ├── cdp_client.js        # Standalone CDP connection to TradingView (port 9222)
 ├── pivots.js            # Floor Pivots + Camarilla
 ├── analyzer.js          # SMC structure, OB/FVG, sweep detection, scoring
+├── market_store.js      # Appends every scan's OHLCV bars + signal snapshots
+├── ml_bridge.js         # Optional Python ML/RNN probability filter
+├── ml_retrainer.js      # Starts background PyTorch retraining from live data
+├── ml/                  # Open-data downloaders, features, labels, baseline, GRU/RNN
 ├── telegram.js          # Bot API wrapper (send + poll updates)
 ├── learning.js          # EWMA component-edge tracking + trade log
 ├── scanner.js           # Main entry point (called every 15 min)
@@ -76,6 +80,57 @@ strategy/
 ├── weights.json         # EWMA accuracy per signal component (auto-created)
 └── scanner.log          # Last run output (auto-created)
 ```
+
+## Core ML / RNN layer
+
+The scanner calls a Python/PyTorch GRU sidecar after the rule-based setup is built. The model is a required neural gate:
+
+```
+OHLCV history → SMC/ICT/Pivot setup → ML probability → Telegram alert
+```
+
+If the model is missing or below the configured probability threshold, the alert is blocked. The model receives price/volume features plus explicit SMC/ICT, auction-market, side, and geopolitical-risk features.
+
+Every scanner cycle can also append live OHLCV bars and signal snapshots:
+
+```
+strategy/ml/data/live/<SYMBOL>_<TF>.csv
+strategy/ml/data/live/scan_signals.jsonl
+```
+
+Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels, and refreshes `strategy/ml/models/rnn.pt`.
+
+Data and model artifacts are ignored by Git:
+
+```
+strategy/ml/data/raw/
+strategy/ml/data/processed/
+strategy/ml/data/live/
+strategy/ml/models/
+strategy/ml/reports/
+```
+
+To enable the model in `config.json`:
+
+```json
+"ml": {
+  "enabled": true,
+  "python": ".venv/bin/python",
+  "modelPath": "strategy/ml/models/rnn.pt",
+  "minProbability": 0.55,
+  "failOpen": false,
+  "timeoutMs": 8000,
+  "retrain": {
+    "enabled": true,
+    "minBars": 250,
+    "seqLen": 32,
+    "hidden": 32,
+    "epochs": 3
+  }
+}
+```
+
+See `ml/README.md` for open-data download, labeling, baseline training, and RNN training commands.
 
 ## Setup (3 steps)
 

@@ -1,5 +1,8 @@
 node_modules/
+.venv/
 screenshots/
+__pycache__/
+*.pyc
 scripts/current.pine
 temp_*
 *.log
@@ -7,4 +10,12 @@ discovery-log.json
 strategy/config.json
 strategy/trades.json
 strategy/weights.json
+strategy/ml/data/raw/
+strategy/ml/data/processed/
+strategy/ml/data/live/
+strategy/ml/models/
+!strategy/ml/models/
+!strategy/ml/models/rnn.pt
+!strategy/ml/models/rnn.json
+strategy/ml/reports/
 .claude/

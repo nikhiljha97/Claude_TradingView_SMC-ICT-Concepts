@@ -34,11 +34,47 @@
     "fvgMinSizePercent": 0.05,
     "pivotConfluencePercent": 0.3,
     "htfBarsToFetch": 100,
-    "entryBarsToFetch": 50,
+    "entryBarsToFetch": 180,
     "cdpWaitMs": 2000
   },
+  "alertContinuity": {
+    "sameDirectionMemoryHours": 4,
+    "resendSkippedAfterMinutes": 45,
+    "minAtrRefresh": 0.35,
+    "scoreRefreshMargin": 0.5,
+    "oppositeDirectionCooldownHours": 2,
+    "flipScoreMargin": 1.25,
+    "flipMinHtfAligned": 3
+  },
+  "dataCapture": {
+    "enabled": true,
+    "path": "strategy/ml/data/live"
+  },
+  "ml": {
+    "enabled": true,
+    "python": ".venv/bin/python",
+    "modelPath": "strategy/ml/models/rnn.pt",
+    "minProbability": 0.55,
+    "failOpen": false,
+    "timeoutMs": 8000,
+    "retrain": {
+      "enabled": true,
+      "minBars": 250,
+      "seqLen": 32,
+      "hidden": 32,
+      "epochs": 3,
+      "minHoursBetweenRuns": 24,
+      "gprPath": "strategy/ml/data/raw/gpr/ai_gpr_data_daily.csv",
+      "seedLabels": [
+        "strategy/ml/data/processed/combined_core_labels.csv"
+      ],
+      "logPath": "strategy/ml/reports/retrain.log",
+      "statePath": "strategy/ml/reports/retrain_state.json",
+      "lockPath": "strategy/ml/models/retrain.lock"
+    }
+  },
   "weights": {
-    "htfAlignment": 2.5,
+    "htfAlignment": 3.5,
     "orderBlockFVG": 2,
     "liquiditySweep": 2,
     "structureConfirm": 1.5,
@@ -47,7 +83,8 @@
     "ictKillzone": 1.0,
     "ictOTE": 0.75,
     "ictNDOG": 0.5,
-    "dailyBias": 0.5,
-    "weeklyTemplate": 0.5
+    "fourHBias": 1.0,
+    "dailyBias": 1.0,
+    "weeklyTemplate": 1.0
   }
 }

@@ -722,6 +722,7 @@ export function computeSignal({
   // ── 1. HTF Trend: Weekly + Daily ────────────────────────────────────────
   const weeklyTrend = detectTrend(barsWeekly, 3);
   const dailyTrend  = detectTrend(barsDaily, 4);
+  const fourHTrend  = detectTrend(bars4H, 4);
 
   const dailyPivotBar = barsDaily[barsDaily.length - 2];
   const dailyPivots   = calcFloorPivots(dailyPivotBar.high, dailyPivotBar.low, dailyPivotBar.close);
@@ -731,11 +732,16 @@ export function computeSignal({
 
   details.weeklyTrend = weeklyTrend;
   details.dailyTrend  = dailyTrend;
+  details.fourHTrend  = fourHTrend;
   details.pivotTrend  = pivotTrend;
   details.dailyPivots = dailyPivots;
 
-  const bullishHTF = weeklyTrend === 'bullish' && (dailyTrend === 'bullish' || pivotTrend === 'bullish' || pivotTrend === 'bullish_breakout');
-  const bearishHTF = weeklyTrend === 'bearish' && (dailyTrend === 'bearish' || pivotTrend === 'bearish');
+  const bullishHTF = weeklyTrend === 'bullish' &&
+    (dailyTrend === 'bullish' || pivotTrend === 'bullish' || pivotTrend === 'bullish_breakout') &&
+    fourHTrend !== 'bearish';
+  const bearishHTF = weeklyTrend === 'bearish' &&
+    (dailyTrend === 'bearish' || pivotTrend === 'bearish') &&
+    fourHTrend !== 'bullish';
   const htfScore   = (bullishHTF || bearishHTF) ? weights.htfAlignment : weights.htfAlignment * 0.4;
   score.total += htfScore;
   score.breakdown.htfAlignment = htfScore;
@@ -876,6 +882,7 @@ export function computeSignal({
 
   const longConditions = [
     bullishHTF,
+    fourHTrend === 'bullish',
     pd4H.zone === 'discount',
     !!hasBullishZone,
     sweep15M.detected && sweep15M.direction === 'bullish',
@@ -887,6 +894,7 @@ export function computeSignal({
   ];
   const shortConditions = [
     bearishHTF,
+    fourHTrend === 'bearish',
     pd4H.zone === 'premium',
     !!hasBearishZone,
     sweep15M.detected && sweep15M.direction === 'bearish',
@@ -899,9 +907,10 @@ export function computeSignal({
 
   const longScore  = longConditions.filter(Boolean).length;
   const shortScore = shortConditions.filter(Boolean).length;
+  details.directionScores = { longScore, shortScore };
 
-  if (longScore >= 3 && score.total >= 4.5) direction = 'BUY';
-  else if (shortScore >= 3 && score.total >= 4.5) direction = 'SELL';
+  if (longScore >= 4 && score.total >= 4.5) direction = 'BUY';
+  else if (shortScore >= 4 && score.total >= 4.5) direction = 'SELL';
 
   // Post-direction: score bonuses for alignment (only count when they agree with final direction)
   if (direction !== 'NONE') {
@@ -910,6 +919,12 @@ export function computeSignal({
       const dbScore = weights.dailyBias || 0.5;
       score.total += dbScore;
       score.breakdown.dailyBias = dbScore;
+    }
+    if ((direction === 'BUY' && fourHTrend === 'bullish') ||
+        (direction === 'SELL' && fourHTrend === 'bearish')) {
+      const fhScore = weights.fourHBias || 1.0;
+      score.total += fhScore;
+      score.breakdown.fourHBias = fhScore;
     }
     if ((direction === 'BUY' && weeklyTemplate.bias === 'bullish') ||
         (direction === 'SELL' && weeklyTemplate.bias === 'bearish')) {

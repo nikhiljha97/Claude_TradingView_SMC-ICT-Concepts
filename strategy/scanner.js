@@ -16,6 +16,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { setSymbol, setTimeframe, getOhlcv, closeClient } from './cdp_client.js';
 import { computeSignal } from './analyzer.js';
+import { scoreWithMl } from './ml_bridge.js';
+import { recordFetchedBars, recordScanSnapshot } from './market_store.js';
+import { maybeStartRetraining } from './ml_retrainer.js';
+import { shouldAlert } from './signal_state.js';
 import { sendMessage, getUpdates, formatAlert, parseFeedback } from './telegram.js';
 import {
   loadTrades, loadWeights, saveWeights, effectiveWeights,
@@ -123,7 +127,16 @@ async function scanSymbol(pair, config, weights) {
   const barsDaily  = await fetchTimeframeBars(pair.symbol, 'D', 60);
   const bars4H     = await fetchTimeframeBars(pair.symbol, '240', 100);
   const bars1H     = await fetchTimeframeBars(pair.symbol, '60', 100);
-  const bars15M    = await fetchTimeframeBars(pair.symbol, '15', 60);
+  const bars15M    = await fetchTimeframeBars(pair.symbol, '15', config.strategy.entryBarsToFetch || 180);
+  const stored = recordFetchedBars(config, pair.symbol, {
+    W: barsWeekly,
+    D: barsDaily,
+    240: bars4H,
+    60: bars1H,
+    15: bars15M,
+  }) || [];
+  const written = stored.reduce((sum, item) => sum + (item.written || 0), 0);
+  if (written > 0) console.log(`[scanner] Stored ${written} new OHLCV bars for ${pair.symbol}`);
 
   const eff = effectiveWeights(weights);
   const signal = computeSignal({
@@ -132,19 +145,39 @@ async function scanSymbol(pair, config, weights) {
     weights: eff,
   });
 
+  const mlResult = await scoreWithMl(config, {
+    signal,
+    bars15M,
+    bars1H,
+    bars4H,
+    barsDaily,
+  });
+  signal.details.ml = mlResult;
+  if (mlResult.enabled) {
+    const mlLabel = mlResult.success
+      ? `p=${Number(mlResult.probability).toFixed(3)} min=${mlResult.minProbability}`
+      : `unavailable (${mlResult.reason || 'unknown'})`;
+    console.log(`[scanner] ${pair.symbol}: ML ${mlLabel} | passed=${mlResult.passed}`);
+  }
+  if (mlResult.enabled && !mlResult.passed) {
+    signal.direction = 'NONE';
+  }
+  recordScanSnapshot(config, pair.symbol, signal);
+
   console.log(`[scanner] ${pair.symbol}: ${signal.direction} | score ${signal.score}/${signal.maxScore.toFixed(1)} | RR ${signal.rr || 'n/a'}`);
 
-  // Only apply cooldown if user explicitly confirmed they took the trade (YES or TP/SL reply).
-  // Unconfirmed (null) or skipped (false) trades do not trigger cooldown.
-  const recentTrades = loadTrades().filter(t => {
-    const age = (Date.now() - new Date(t.timestamp).getTime()) / 3600000;
-    return t.symbol === pair.symbol && age < 4 && t.direction === signal.direction && t.confirmed === true;
-  });
+  const continuity = signal.direction !== 'NONE'
+    ? shouldAlert(signal, loadTrades(), config)
+    : { allow: false, reason: 'no_signal' };
+  signal.details.continuity = continuity;
+  if (signal.direction !== 'NONE' && !continuity.allow) {
+    console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${continuity.reason}`);
+  }
 
   if (signal.direction !== 'NONE' &&
       signal.score >= config.strategy.alertScoreThreshold &&
       signal.rr >= config.strategy.minRR &&
-      recentTrades.length === 0) {
+      continuity.allow) {
     signal.tradeId = genTradeId();
     logAlert(signal);
     if (config.telegram.chat_id) {
@@ -189,6 +222,12 @@ async function main() {
   }
 
   await closeClient();
+  const retrain = maybeStartRetraining(config);
+  if (retrain.started) {
+    console.log(`[scanner] Started background RNN retraining pid=${retrain.pid} log=${retrain.logPath}`);
+  } else if (retrain.reason && retrain.reason !== 'disabled') {
+    console.log(`[scanner] RNN retraining skipped: ${retrain.reason}`);
+  }
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[scanner] === Cycle complete in ${elapsed}s, ${alerts.length} alert(s) fired ===`);
 }

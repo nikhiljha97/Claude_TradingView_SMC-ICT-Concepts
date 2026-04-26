@@ -66,6 +66,7 @@ export function formatAlert(signal) {
   const d = signal.details;
   if (d.weeklyTrend) reasoning.push(`Weekly: ${d.weeklyTrend}`);
   if (d.dailyTrend)  reasoning.push(`Daily: ${d.dailyTrend}`);
+  if (d.fourHTrend)  reasoning.push(`4H: ${d.fourHTrend}`);
   if (d.pivotTrend)  reasoning.push(`Pivot: ${d.pivotTrend}`);
   if (d.pd4H)        reasoning.push(`4H zone: ${d.pd4H.zone} (${d.pd4H.position}%)`);
   if (d.nearBullishOB) reasoning.push(`✓ 4H Bull OB at ${fmt(d.nearBullishOB.low)}-${fmt(d.nearBullishOB.high)}`);
@@ -92,6 +93,9 @@ export function formatAlert(signal) {
   if (d.po3?.phase === 'manipulation') reasoning.push(`✓ PO3 manipulation phase (London sweep)`);
   if (d.dailyBias?.bias && d.dailyBias.bias !== 'neutral') reasoning.push(`✓ Daily bias: ${d.dailyBias.bias} (prev close ${fmt(d.dailyBias.prevClose)} → ${fmt(d.dailyBias.currClose)})`);
   if (d.weeklyTemplate?.template !== 'none' && d.weeklyTemplate?.template) reasoning.push(`✓ Weekly template: ${d.weeklyTemplate.template.replace(/_/g, ' ')} (${d.weeklyTemplate.bias})`);
+  if (d.ml?.enabled && d.ml?.success) reasoning.push(`✓ ML probability: ${(d.ml.probability * 100).toFixed(1)}% (min ${(d.ml.minProbability * 100).toFixed(0)}%)`);
+  if (d.ml?.enabled && !d.ml?.success && d.ml?.reason) reasoning.push(`ML unavailable: ${d.ml.reason}`);
+  if (d.continuity?.reason) reasoning.push(`Continuity: ${d.continuity.reason.replace(/_/g, ' ')}`);
   if (d.pivotConfl?.pivotMatches?.length) {
     const m = d.pivotConfl.pivotMatches[0];
     reasoning.push(`✓ Pivot ${m.name} @ ${fmt(m.level)}`);
