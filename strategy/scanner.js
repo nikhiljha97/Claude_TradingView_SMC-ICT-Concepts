@@ -119,6 +119,22 @@ async function fetchTimeframeBars(symbol, tf, count) {
   return await getOhlcv(count);
 }
 
+function mlSummary(result) {
+  if (!result?.enabled) return 'disabled';
+  if (result.success) return `p=${Number(result.probability).toFixed(3)} min=${result.minProbability}`;
+  return `unavailable (${result.reason || 'unknown'})`;
+}
+
+async function scoreDirectionalProbe(config, payload, direction) {
+  return scoreWithMl(config, {
+    ...payload,
+    signal: {
+      ...payload.signal,
+      direction,
+    },
+  });
+}
+
 async function scanSymbol(pair, config, weights) {
   console.log(`[scanner] Scanning ${pair.symbol}...`);
   await setSymbol(pair.symbol);
@@ -146,30 +162,44 @@ async function scanSymbol(pair, config, weights) {
     weights: eff,
   });
 
-  const mlResult = await scoreWithMl(config, {
+  const mlPayload = {
     signal,
     bars15M,
     bars1H,
     bars4H,
     barsDaily,
-  });
-  signal.details.ml = mlResult;
-  if (mlResult.enabled) {
-    const mlLabel = mlResult.success
-      ? `p=${Number(mlResult.probability).toFixed(3)} min=${mlResult.minProbability}`
-      : `unavailable (${mlResult.reason || 'unknown'})`;
-    console.log(`[scanner] ${pair.symbol}: ML ${mlLabel} | passed=${mlResult.passed}`);
-  }
-  if (mlResult.enabled && !mlResult.passed) {
-    signal.direction = 'NONE';
+  };
+
+  let mlResult = { enabled: config?.ml?.enabled !== false, passed: false, success: false, reason: 'no_rule_direction' };
+  if (signal.direction !== 'NONE') {
+    mlResult = await scoreWithMl(config, mlPayload);
+    signal.details.ml = mlResult;
+    if (mlResult.enabled) {
+      console.log(`[scanner] ${pair.symbol}: ML ${mlSummary(mlResult)} | passed=${mlResult.passed}`);
+    }
+    if (mlResult.enabled && !mlResult.passed) {
+      signal.direction = 'NONE';
+    }
+  } else {
+    signal.details.ml = mlResult;
+    if (config?.ml?.probeWhenNoSignal !== false) {
+      const [buyProbe, sellProbe] = await Promise.all([
+        scoreDirectionalProbe(config, mlPayload, 'BUY'),
+        scoreDirectionalProbe(config, mlPayload, 'SELL'),
+      ]);
+      signal.details.mlCandidates = { BUY: buyProbe, SELL: sellProbe };
+      if (buyProbe.enabled || sellProbe.enabled) {
+        console.log(`[scanner] ${pair.symbol}: ML side probes BUY ${mlSummary(buyProbe)} | SELL ${mlSummary(sellProbe)} (research only)`);
+      }
+    }
   }
   recordScanSnapshot(config, pair.symbol, signal);
 
   console.log(`[scanner] ${pair.symbol}: ${signal.direction} | score ${signal.score}/${signal.maxScore.toFixed(1)} | RR ${signal.rr || 'n/a'}`);
 
   if (signal.direction === 'NONE') {
-    if (mlResult.enabled && mlResult.passed) {
-      console.log(`[scanner] No alert for ${pair.symbol}: ML passed, but strategy returned NONE (no actionable BUY/SELL setup).`);
+    if (signal.details.mlCandidates) {
+      console.log(`[scanner] No alert for ${pair.symbol}: rule engine returned NONE; ML side probes are research-only until structure confirms a direction.`);
     }
     return null;
   }

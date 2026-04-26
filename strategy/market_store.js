@@ -82,6 +82,7 @@ export function recordScanSnapshot(config, symbol, signal) {
     tp2: signal.tp2,
     breakdown: signal.breakdown,
     ml: signal.details?.ml,
+    mlCandidates: signal.details?.mlCandidates,
   };
   fs.appendFileSync(filePath, JSON.stringify(payload) + '\n');
 }
