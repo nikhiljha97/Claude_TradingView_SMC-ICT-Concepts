@@ -35,14 +35,21 @@ export function tgRequest(token, method, params = {}) {
 }
 
 export async function sendMessage(token, chatId, text, options = {}) {
-  return tgRequest(token, 'sendMessage', {
+  const payload = {
     chat_id: chatId,
     text,
     parse_mode: 'Markdown',
     disable_web_page_preview: true,
     disable_notification: false, // always notify even if chat is muted on device
     ...options,
-  });
+  };
+  try {
+    return await tgRequest(token, 'sendMessage', payload);
+  } catch (err) {
+    if (!String(err.message || '').includes("can't parse entities")) throw err;
+    const { parse_mode, ...plainPayload } = payload;
+    return tgRequest(token, 'sendMessage', plainPayload);
+  }
 }
 
 export async function getUpdates(token, offset = 0) {
