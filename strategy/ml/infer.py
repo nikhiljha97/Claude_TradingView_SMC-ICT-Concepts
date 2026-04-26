@@ -18,7 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from strategy.ml.common import load_json
-from strategy.ml.features import build_features
+from strategy.ml.features import build_features, load_gpr, load_news
 
 
 def normalize_timestamp(value) -> int | str | None:
@@ -66,8 +66,8 @@ def attach_side(rows: list[dict], signal: dict) -> list[dict]:
     return rows
 
 
-def score_baseline(model: dict, bars: list[dict], signal: dict) -> dict:
-    rows = attach_side(build_features(bars), signal)
+def score_baseline(model: dict, bars: list[dict], signal: dict, gpr=None, news=None) -> dict:
+    rows = attach_side(build_features(bars, gpr, news), signal)
     if not rows:
         return {"success": False, "reason": "not_enough_bars"}
     latest = rows[-1]
@@ -85,7 +85,7 @@ def score_baseline(model: dict, bars: list[dict], signal: dict) -> dict:
     }
 
 
-def score_rnn(model_path: Path, bars: list[dict], signal: dict) -> dict:
+def score_rnn(model_path: Path, bars: list[dict], signal: dict, gpr=None, news=None) -> dict:
     try:
         import torch
         from torch import nn
@@ -93,7 +93,7 @@ def score_rnn(model_path: Path, bars: list[dict], signal: dict) -> dict:
         return {"success": False, "reason": "torch_not_installed"}
 
     checkpoint = torch.load(model_path, map_location="cpu")
-    rows = attach_side(build_features(bars), signal)
+    rows = attach_side(build_features(bars, gpr, news), signal)
     seq_len = checkpoint["seq_len"]
     if len(rows) < seq_len:
         return {"success": False, "reason": "not_enough_bars"}
@@ -132,12 +132,16 @@ def score_rnn(model_path: Path, bars: list[dict], signal: dict) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=None)
+    parser.add_argument("--gpr", default=None)
+    parser.add_argument("--news", default=None)
     args = parser.parse_args()
 
     payload = json.load(sys.stdin)
     model_path = Path(args.model or payload.get("modelPath", "strategy/ml/models/rnn.pt"))
     bars = normalize_bars(payload.get("bars15M") or payload.get("bars") or [])
     signal = payload.get("signal") or {}
+    gpr = load_gpr(args.gpr or payload.get("gprPath"))
+    news = load_news(args.news or payload.get("newsPath"))
 
     if not model_path.exists():
         print(json.dumps({"success": False, "reason": "model_missing", "modelPath": str(model_path)}))
@@ -145,9 +149,9 @@ def main() -> None:
 
     if model_path.suffix == ".json":
         model = load_json(model_path)
-        result = score_baseline(model, bars, signal)
+        result = score_baseline(model, bars, signal, gpr, news)
     elif model_path.suffix == ".pt":
-        result = score_rnn(model_path, bars, signal)
+        result = score_rnn(model_path, bars, signal, gpr, news)
     else:
         result = {"success": False, "reason": "unsupported_model_type"}
 

@@ -10,11 +10,18 @@ function resolveModelPath(modelPath) {
   return path.isAbsolute(modelPath) ? modelPath : path.join(REPO_ROOT, modelPath);
 }
 
+function resolveOptionalPath(value) {
+  if (!value) return null;
+  return path.isAbsolute(value) ? value : path.join(REPO_ROOT, value);
+}
+
 export function mlConfig(config) {
   return {
     enabled: config?.ml?.enabled !== false,
     python: config?.ml?.python || 'python3',
     modelPath: resolveModelPath(config?.ml?.modelPath),
+    gprPath: resolveOptionalPath(config?.ml?.retrain?.gprPath || config?.ml?.gprPath),
+    newsPath: resolveOptionalPath(config?.ml?.retrain?.newsPath || config?.ml?.newsPath),
     minProbability: Number(config?.ml?.minProbability ?? 0.55),
     failOpen: config?.ml?.failOpen === true,
     timeoutMs: Number(config?.ml?.timeoutMs ?? 8000),
@@ -29,9 +36,12 @@ export function scoreWithMl(config, payload) {
 
   const script = path.join(__dirname, 'ml', 'infer.py');
   const input = JSON.stringify({ ...payload, modelPath: ml.modelPath });
+  const args = [script, '--model', ml.modelPath];
+  if (ml.gprPath) args.push('--gpr', ml.gprPath);
+  if (ml.newsPath) args.push('--news', ml.newsPath);
 
   return new Promise((resolve) => {
-    const child = spawn(ml.python, [script, '--model', ml.modelPath], {
+    const child = spawn(ml.python, args, {
       cwd: REPO_ROOT,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

@@ -7,7 +7,7 @@ This folder adds an optional machine-learning layer to the existing scanner. It 
 ## Workflow
 
 1. Download open historical data.
-2. Build auditable OHLCV features.
+2. Build auditable OHLCV, SMC/ICT, auction, geopolitical, and headline-pressure features.
 3. Create TP-before-SL labels.
 4. Train a simple logistic baseline.
 5. Train a GRU/RNN only after the baseline is useful.
@@ -67,6 +67,25 @@ python -m strategy.ml.train_rnn \
 ```
 
 This writes `strategy/ml/models/rnn.pt`.
+
+## Geopolitical / News Features
+
+The model uses two geopolitical context layers:
+
+- Official daily AI-GPR data from Matteo Iacoviello and Jonathan Tong:
+  `strategy/ml/data/raw/gpr/ai_gpr_data_daily.csv`
+- Near-real-time headline pressure from GDELT plus broad RSS feeds:
+  `strategy/ml/data/raw/news/geopolitical_news_daily.csv`
+
+Refresh them manually:
+
+```bash
+python -m strategy.ml.data_sources.gpr
+python -m strategy.ml.data_sources.news
+```
+
+Hourly live retraining refreshes both datasets when `refreshGpr` and
+`refreshNews` are enabled in `strategy/config.json`.
 
 ## Scanner Integration
 

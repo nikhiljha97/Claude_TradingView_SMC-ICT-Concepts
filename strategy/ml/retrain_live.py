@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from strategy.ml.common import PROCESSED_DIR, ensure_dirs, read_bars, write_rows
-from strategy.ml.features import load_gpr
+from strategy.ml.features import load_gpr, load_news
 from strategy.ml.labels import LABEL_FIELDS, label_rows
 from strategy.ml.train_rnn import train_model
 
@@ -28,11 +29,21 @@ def load_csv_rows(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def refresh_dataset(script_name: str, out_path: str | None) -> None:
+    if not out_path:
+        return
+    script = Path(__file__).resolve().parent / "data_sources" / script_name
+    subprocess.run([sys.executable, str(script), "--out", out_path], check=False)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live-dir", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--gpr", default=None)
+    parser.add_argument("--news", default=None)
+    parser.add_argument("--refresh-gpr", action="store_true")
+    parser.add_argument("--refresh-news", action="store_true")
     parser.add_argument("--seed-label", action="append", default=[])
     parser.add_argument("--min-bars", type=int, default=250)
     parser.add_argument("--seq-len", type=int, default=32)
@@ -52,7 +63,12 @@ def main() -> None:
 
     try:
         live_dir = Path(args.live_dir)
+        if args.refresh_gpr:
+            refresh_dataset("gpr.py", args.gpr)
+        if args.refresh_news:
+            refresh_dataset("news.py", args.news)
         gpr = load_gpr(args.gpr)
+        news = load_news(args.news)
         all_rows = []
         for csv_path in sorted(live_dir.glob("*_15.csv")):
             if count_rows(csv_path) < args.min_bars:
@@ -60,8 +76,8 @@ def main() -> None:
             bars = read_bars(csv_path)
             label_path = PROCESSED_DIR / f"live_{csv_path.stem}_labels.csv"
             rows = []
-            rows.extend(label_rows(bars, "long", 2.5, 1.0, 32, gpr))
-            rows.extend(label_rows(bars, "short", 2.5, 1.0, 32, gpr))
+            rows.extend(label_rows(bars, "long", 2.5, 1.0, 32, gpr, news))
+            rows.extend(label_rows(bars, "short", 2.5, 1.0, 32, gpr, news))
             write_rows(label_path, rows, LABEL_FIELDS)
             all_rows.extend(rows)
 

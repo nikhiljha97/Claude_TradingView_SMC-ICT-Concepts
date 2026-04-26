@@ -25,6 +25,13 @@ from strategy.ml.features import FEATURE_FIELDS
 FEATURES = [f for f in FEATURE_FIELDS if f not in {"timestamp", "close"}] + ["side_long", "side_short"]
 
 
+def feature_value(row: dict, key: str) -> float:
+    value = row.get(key)
+    if value in (None, ""):
+        return 0.0
+    return float(value)
+
+
 def sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(-40.0, min(40.0, x))))
 
@@ -34,7 +41,7 @@ def load_dataset(path: str):
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             try:
-                rows.append(([float(row[k]) for k in FEATURES], int(row["label"])))
+                rows.append(([feature_value(row, k) for k in FEATURES], int(row["label"])))
             except (KeyError, ValueError):
                 continue
     return rows

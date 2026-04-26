@@ -33,7 +33,10 @@ FEATURE_FIELDS = (
     "ict_killzone_ny", "ict_killzone_asia", "auction_failed_up",
     "auction_failed_down", "auction_initiative_buy", "auction_initiative_sell",
     "auction_balance", "gpr_ai", "gpr_aer", "gpr_oil", "gpr_nonoil",
-    "gpr_ai_change_7", "gpr_ai_z_90",
+    "gpr_ai_change_7", "gpr_ai_z_90", "news_geo_score", "news_geo_count",
+    "news_conflict_score", "news_energy_score", "news_us_score",
+    "news_europe_score", "news_russia_score", "news_china_score",
+    "news_middle_east_score", "news_global_score",
 )
 
 
@@ -93,6 +96,52 @@ def load_gpr(path: str | None) -> dict[str, dict]:
             "gpr_ai_z_90": safe_div(row["GPR_AI"] - m, s),
         }
     return by_date
+
+
+def load_news(path: str | None) -> dict[str, dict]:
+    if not path:
+        return {}
+    rows = {}
+    try:
+        f = open(path, newline="")
+    except FileNotFoundError:
+        return {}
+    with f:
+        for row in csv.DictReader(f):
+            date = row.get("date") or row.get("Date")
+            if not date:
+                continue
+            try:
+                rows[date] = {
+                    "news_geo_score": float(row.get("geo_score", 0) or 0),
+                    "news_geo_count": float(row.get("geo_count", 0) or 0),
+                    "news_conflict_score": float(row.get("conflict_score", 0) or 0),
+                    "news_energy_score": float(row.get("energy_score", 0) or 0),
+                    "news_us_score": float(row.get("us_score", 0) or 0),
+                    "news_europe_score": float(row.get("europe_score", 0) or 0),
+                    "news_russia_score": float(row.get("russia_score", 0) or 0),
+                    "news_china_score": float(row.get("china_score", 0) or 0),
+                    "news_middle_east_score": float(row.get("middle_east_score", 0) or 0),
+                    "news_global_score": float(row.get("global_score", 0) or 0),
+                }
+            except ValueError:
+                continue
+    return rows
+
+
+def default_news_features() -> dict:
+    return {
+        "news_geo_score": 0.0,
+        "news_geo_count": 0.0,
+        "news_conflict_score": 0.0,
+        "news_energy_score": 0.0,
+        "news_us_score": 0.0,
+        "news_europe_score": 0.0,
+        "news_russia_score": 0.0,
+        "news_china_score": 0.0,
+        "news_middle_east_score": 0.0,
+        "news_global_score": 0.0,
+    }
 
 
 def swing_flags(window: list[dict]) -> tuple[float, float, float]:
@@ -200,12 +249,13 @@ def smc_ict_auction_features(bars: list[dict], i: int, atr_14: float, vol_z: flo
     }
 
 
-def build_features(bars: list[dict], gpr: dict[str, dict] | None = None) -> list[dict]:
+def build_features(bars: list[dict], gpr: dict[str, dict] | None = None, news: dict[str, dict] | None = None) -> list[dict]:
     rows = []
     trs = []
     closes = []
     volumes = []
     gpr = gpr or {}
+    news = news or {}
 
     for i, bar in enumerate(bars):
         close = bar["close"]
@@ -237,6 +287,7 @@ def build_features(bars: list[dict], gpr: dict[str, dict] | None = None) -> list
             "gpr_ai_change_7": 0.0,
             "gpr_ai_z_90": 0.0,
         })
+        news_features = news.get(date_key, default_news_features())
         structure = smc_ict_auction_features(bars, i, atr_14, vol_z)
 
         rows.append({
@@ -256,6 +307,7 @@ def build_features(bars: list[dict], gpr: dict[str, dict] | None = None) -> list
             "range_pos_50": safe_div(close - low_50, high_50 - low_50, 0.5),
             **structure,
             **gpr_features,
+            **news_features,
         })
 
     return rows
@@ -265,11 +317,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--gpr", default=None)
+    parser.add_argument("--news", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
     ensure_dirs()
-    rows = build_features(read_bars(args.input), load_gpr(args.gpr))
+    rows = build_features(read_bars(args.input), load_gpr(args.gpr), load_news(args.news))
     out = Path(args.out) if args.out else PROCESSED_DIR / (Path(args.input).stem + "_features.csv")
     write_rows(out, rows, FEATURE_FIELDS)
     print(out)

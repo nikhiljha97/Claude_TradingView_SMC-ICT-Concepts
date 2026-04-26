@@ -13,14 +13,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from strategy.ml.common import PROCESSED_DIR, ensure_dirs, read_bars, safe_div, write_rows
-from strategy.ml.features import FEATURE_FIELDS, build_features, load_gpr
+from strategy.ml.features import FEATURE_FIELDS, build_features, load_gpr, load_news
 
 
 LABEL_FIELDS = (*FEATURE_FIELDS, "side_long", "side_short", "side", "tp", "sl", "horizon", "label", "bars_to_event")
 
 
-def label_rows(bars: list[dict], side: str, tp_atr: float, sl_atr: float, horizon: int, gpr=None) -> list[dict]:
-    features = build_features(bars, gpr)
+def label_rows(bars: list[dict], side: str, tp_atr: float, sl_atr: float, horizon: int, gpr=None, news=None) -> list[dict]:
+    features = build_features(bars, gpr, news)
     by_ts = {row["timestamp"]: row for row in features}
     rows = []
 
@@ -78,6 +78,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--gpr", default=None)
+    parser.add_argument("--news", default=None)
     parser.add_argument("--side", choices=("long", "short", "both"), default="both")
     parser.add_argument("--tp-atr", type=float, default=2.5)
     parser.add_argument("--sl-atr", type=float, default=1.0)
@@ -88,10 +89,11 @@ def main() -> None:
     ensure_dirs()
     bars = read_bars(args.input)
     gpr = load_gpr(args.gpr)
+    news = load_news(args.news)
     sides = ["long", "short"] if args.side == "both" else [args.side]
     rows = []
     for side in sides:
-        rows.extend(label_rows(bars, side, args.tp_atr, args.sl_atr, args.horizon, gpr))
+        rows.extend(label_rows(bars, side, args.tp_atr, args.sl_atr, args.horizon, gpr, news))
 
     out = Path(args.out) if args.out else PROCESSED_DIR / (Path(args.input).stem + "_labels.csv")
     write_rows(out, rows, LABEL_FIELDS)

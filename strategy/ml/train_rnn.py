@@ -21,6 +21,13 @@ from strategy.ml.common import MODEL_DIR, ensure_dirs, save_json
 from strategy.ml.train_baseline import FEATURES
 
 
+def feature_value(row: dict, key: str) -> float:
+    value = row.get(key)
+    if value in (None, ""):
+        return 0.0
+    return float(value)
+
+
 def require_torch():
     try:
         import torch
@@ -35,7 +42,7 @@ def load_rows(path: str):
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             try:
-                rows.append(([float(row[k]) for k in FEATURES], int(row["label"])))
+                rows.append(([feature_value(row, k) for k in FEATURES], int(row["label"])))
             except (KeyError, ValueError):
                 continue
     return rows

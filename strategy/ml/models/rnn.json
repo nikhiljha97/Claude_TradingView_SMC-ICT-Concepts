@@ -37,11 +37,21 @@
     "gpr_nonoil",
     "gpr_ai_change_7",
     "gpr_ai_z_90",
+    "news_geo_score",
+    "news_geo_count",
+    "news_conflict_score",
+    "news_energy_score",
+    "news_us_score",
+    "news_europe_score",
+    "news_russia_score",
+    "news_china_score",
+    "news_middle_east_score",
+    "news_global_score",
     "side_long",
     "side_short"
   ],
   "hidden": 32,
   "seq_len": 32,
-  "test_accuracy": 0.6659159064292908,
+  "test_accuracy": 0.7197197079658508,
   "type": "gru"
 }

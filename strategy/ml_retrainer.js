@@ -49,6 +49,9 @@ export function maybeStartRetraining(config) {
     '--lock', lockPath,
   ];
   if (retrain.gprPath) args.push('--gpr', resolveRepoPath(retrain.gprPath));
+  if (retrain.newsPath) args.push('--news', resolveRepoPath(retrain.newsPath));
+  if (retrain.refreshGpr !== false) args.push('--refresh-gpr');
+  if (retrain.refreshNews !== false) args.push('--refresh-news');
   for (const seed of retrain.seedLabels || []) args.push('--seed-label', resolveRepoPath(seed));
 
   const log = fs.openSync(logPath, 'a');

@@ -89,7 +89,7 @@ The scanner calls a Python/PyTorch GRU sidecar after the rule-based setup is bui
 OHLCV history → SMC/ICT/Pivot setup → ML probability → Telegram alert
 ```
 
-If the model is missing or below the configured probability threshold, the alert is blocked. The model receives price/volume features plus explicit SMC/ICT, auction-market, side, and geopolitical-risk features.
+If the model is missing or below the configured probability threshold, the alert is blocked. The model receives price/volume features plus explicit SMC/ICT, auction-market, side, official AI-GPR geopolitical-risk features, and near-real-time headline-pressure features from GDELT/RSS feeds.
 
 Every scanner cycle can also append live OHLCV bars and signal snapshots:
 
