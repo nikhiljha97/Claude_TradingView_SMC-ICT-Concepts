@@ -166,6 +166,13 @@ async function scanSymbol(pair, config, weights) {
 
   console.log(`[scanner] ${pair.symbol}: ${signal.direction} | score ${signal.score}/${signal.maxScore.toFixed(1)} | RR ${signal.rr || 'n/a'}`);
 
+  if (signal.direction === 'NONE') {
+    if (mlResult.enabled && mlResult.passed) {
+      console.log(`[scanner] No alert for ${pair.symbol}: ML passed, but strategy returned NONE (no actionable BUY/SELL setup).`);
+    }
+    return null;
+  }
+
   const continuity = signal.direction !== 'NONE'
     ? shouldAlert(signal, loadTrades(), config)
     : { allow: false, reason: 'no_signal' };
@@ -174,8 +181,7 @@ async function scanSymbol(pair, config, weights) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${continuity.reason}`);
   }
 
-  if (signal.direction !== 'NONE' &&
-      signal.score >= config.strategy.alertScoreThreshold &&
+  if (signal.score >= config.strategy.alertScoreThreshold &&
       signal.rr >= config.strategy.minRR &&
       continuity.allow) {
     signal.tradeId = genTradeId();
@@ -189,6 +195,17 @@ async function scanSymbol(pair, config, weights) {
     return signal;
   }
 
+  const reasons = [];
+  if (signal.score < config.strategy.alertScoreThreshold) {
+    reasons.push(`score ${signal.score} < ${config.strategy.alertScoreThreshold}`);
+  }
+  if (signal.rr < config.strategy.minRR) {
+    reasons.push(`RR ${signal.rr || 'n/a'} < ${config.strategy.minRR}`);
+  }
+  if (!continuity.allow) {
+    reasons.push(`continuity ${continuity.reason || 'blocked'}`);
+  }
+  console.log(`[scanner] No alert for ${pair.symbol} ${signal.direction}: ${reasons.join(', ')}`);
   return null;
 }
 
