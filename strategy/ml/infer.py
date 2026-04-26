@@ -21,6 +21,34 @@ from strategy.ml.common import load_json
 from strategy.ml.features import build_features
 
 
+def normalize_timestamp(value) -> int | str | None:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return value
+    return int(numeric * 1000) if numeric < 10_000_000_000 else int(numeric)
+
+
+def normalize_bars(bars: list[dict]) -> list[dict]:
+    normalized = []
+    for bar in bars:
+        try:
+            timestamp = normalize_timestamp(bar.get("timestamp") or bar.get("time") or bar.get("t") or bar.get("date"))
+            normalized.append({
+                "timestamp": timestamp,
+                "open": float(bar.get("open", bar.get("o"))),
+                "high": float(bar.get("high", bar.get("h"))),
+                "low": float(bar.get("low", bar.get("l"))),
+                "close": float(bar.get("close", bar.get("c"))),
+                "volume": float(bar.get("volume", bar.get("v", 0)) or 0),
+            })
+        except (TypeError, ValueError):
+            continue
+    return normalized
+
+
 def sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(-40.0, min(40.0, x))))
 
@@ -108,7 +136,7 @@ def main() -> None:
 
     payload = json.load(sys.stdin)
     model_path = Path(args.model or payload.get("modelPath", "strategy/ml/models/rnn.pt"))
-    bars = payload.get("bars15M") or payload.get("bars") or []
+    bars = normalize_bars(payload.get("bars15M") or payload.get("bars") or [])
     signal = payload.get("signal") or {}
 
     if not model_path.exists():
