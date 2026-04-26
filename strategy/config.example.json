@@ -63,7 +63,7 @@
       "seqLen": 32,
       "hidden": 32,
       "epochs": 3,
-      "minHoursBetweenRuns": 24,
+      "minHoursBetweenRuns": 1,
       "gprPath": "strategy/ml/data/raw/gpr/ai_gpr_data_daily.csv",
       "seedLabels": [
         "strategy/ml/data/processed/combined_core_labels.csv"
