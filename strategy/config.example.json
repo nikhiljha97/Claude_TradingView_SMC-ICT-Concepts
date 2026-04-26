@@ -56,7 +56,7 @@
     "modelPath": "strategy/ml/models/rnn.pt",
     "minProbability": 0.55,
     "failOpen": false,
-    "timeoutMs": 8000,
+    "timeoutMs": 30000,
     "retrain": {
       "enabled": true,
       "minBars": 250,

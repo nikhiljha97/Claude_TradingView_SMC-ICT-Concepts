@@ -40,8 +40,8 @@
     "side_long",
     "side_short"
   ],
-  "hidden": 24,
+  "hidden": 32,
   "seq_len": 32,
-  "test_accuracy": 0.6809309124946594,
+  "test_accuracy": 0.6659159064292908,
   "type": "gru"
 }

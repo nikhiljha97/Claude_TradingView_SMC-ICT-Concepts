@@ -63,6 +63,7 @@ export function scoreWithMl(config, payload) {
           probability: Number.isFinite(probability) ? probability : null,
           minProbability: ml.minProbability,
           passed,
+          reason: result.reason || (result.success === true ? undefined : 'inference_failed'),
           stderr: stderr.trim() || undefined,
         });
       } catch (err) {
