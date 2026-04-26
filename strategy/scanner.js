@@ -19,6 +19,7 @@ import { computeSignal } from './analyzer.js';
 import { scoreWithMl } from './ml_bridge.js';
 import { recordFetchedBars, recordScanSnapshot } from './market_store.js';
 import { maybeStartRetraining } from './ml_retrainer.js';
+import { refreshNewsContext } from './context_refresh.js';
 import { shouldAlert } from './signal_state.js';
 import { sendMessage, getUpdates, formatAlert, parseFeedback } from './telegram.js';
 import {
@@ -221,6 +222,13 @@ async function main() {
     await processFeedback(config, weights);
   } catch (e) {
     console.error(`[scanner] Telegram feedback error: ${e.message}`);
+  }
+
+  const newsRefresh = await refreshNewsContext(config);
+  if (newsRefresh.refreshed) {
+    console.log(`[scanner] News context refreshed in ${(newsRefresh.elapsedMs / 1000).toFixed(1)}s`);
+  } else if (newsRefresh.reason && !['fresh', 'disabled'].includes(newsRefresh.reason)) {
+    console.log(`[scanner] News context refresh skipped: ${newsRefresh.reason}`);
   }
 
   // 2. Pick watchlist based on session (weekday forex/indices vs weekend crypto)

@@ -79,7 +79,7 @@ CATEGORY_KEYWORDS = {
 }
 
 
-def fetch_url(url: str, timeout: int = 20) -> bytes:
+def fetch_url(url: str, timeout: int = 8) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "tradingview-mcp-geonews/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return response.read()
@@ -103,7 +103,7 @@ def parse_date(value: str | None) -> dt.date:
         return dt.datetime.now(dt.timezone.utc).date()
 
 
-def collect_gdelt(max_records: int) -> list[dict]:
+def collect_gdelt(max_records: int, timeout: int) -> list[dict]:
     params = {
         "query": GDELT_QUERY,
         "mode": "artlist",
@@ -113,7 +113,7 @@ def collect_gdelt(max_records: int) -> list[dict]:
     }
     url = f"{GDELT_DOC_URL}?{urllib.parse.urlencode(params)}"
     try:
-        payload = json.loads(fetch_url(url).decode("utf-8", errors="replace"))
+        payload = json.loads(fetch_url(url, timeout=timeout).decode("utf-8", errors="replace"))
     except Exception as exc:
         print(f"warning: gdelt fetch failed: {exc}", file=sys.stderr)
         return []
@@ -152,11 +152,11 @@ def rss_items(xml_bytes: bytes, source: str) -> list[dict]:
     return items
 
 
-def collect_rss() -> list[dict]:
+def collect_rss(timeout: int) -> list[dict]:
     rows = []
     for source, url in RSS_FEEDS.items():
         try:
-            rows.extend(rss_items(fetch_url(url), source))
+            rows.extend(rss_items(fetch_url(url, timeout=timeout), source))
         except Exception as exc:
             print(f"warning: rss fetch failed source={source}: {exc}", file=sys.stderr)
     return rows
@@ -241,12 +241,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default=str(RAW_DIR / "news" / "geopolitical_news_daily.csv"))
     parser.add_argument("--max-gdelt", type=int, default=100)
+    parser.add_argument("--timeout", type=int, default=8)
     args = parser.parse_args()
 
     ensure_dirs()
     out = Path(args.out)
-    articles = collect_gdelt(args.max_gdelt)
-    articles.extend(collect_rss())
+    articles = collect_gdelt(args.max_gdelt, args.timeout)
+    articles.extend(collect_rss(args.timeout))
     rows = merge_existing(out, aggregate(articles))
     write_rows(out, rows)
     print(out)

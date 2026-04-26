@@ -50,6 +50,16 @@
     "enabled": true,
     "path": "strategy/ml/data/live"
   },
+  "newsRefresh": {
+    "enabled": true,
+    "minMinutesBetweenRuns": 15,
+    "timeoutMs": 20000,
+    "sourceTimeoutMs": 8000,
+    "path": "strategy/ml/data/raw/news/geopolitical_news_daily.csv",
+    "logPath": "strategy/ml/reports/news_refresh.log",
+    "statePath": "strategy/ml/reports/news_refresh_state.json",
+    "lockPath": "strategy/ml/reports/news_refresh.lock"
+  },
   "ml": {
     "enabled": true,
     "python": ".venv/bin/python",
