@@ -137,9 +137,9 @@ export function applyFeedback(tradeId, outcome, weights) {
 
   trade.outcome = outcome;
   trade.outcomeAt = new Date().toISOString();
-  saveTrades(trades);
-
   trade.confirmed = true; // TP/SL reply implies they took the trade
+  trade.confirmedAt = trade.confirmedAt || trade.outcomeAt;
+  saveTrades(trades);
   const win = outcome === 'TP' ? 1 : 0;
   weights.totalTrades = (weights.totalTrades || 0) + 1;
   weights.wins   = (weights.wins   || 0) + win;
@@ -184,6 +184,7 @@ export function applyConfirmation(tradeId, took) {
   if (trade.confirmed !== null && trade.confirmed !== undefined)
     return { ok: false, error: `Trade ${tradeId} already ${trade.confirmed ? 'confirmed' : 'skipped'}.` };
   trade.confirmed = took;
+  trade.confirmedAt = new Date().toISOString();
   saveTrades(trades);
   return { ok: true, trade };
 }

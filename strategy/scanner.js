@@ -303,6 +303,11 @@ async function main() {
   const alerts = [];
   for (const pair of pairs) {
     try {
+      await processFeedback(config, weights);
+    } catch (e) {
+      console.error(`[scanner] Telegram feedback error before ${pair.symbol}: ${e.message}`);
+    }
+    try {
       const sig = await scanSymbol(pair, config, weights);
       if (sig) alerts.push(sig);
     } catch (e) {
