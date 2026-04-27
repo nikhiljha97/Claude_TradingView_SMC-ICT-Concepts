@@ -7,9 +7,12 @@ scripts/current.pine
 temp_*
 *.log
 discovery-log.json
+alerts_log/
+rules.json
 strategy/config.json
 strategy/trades.json
 strategy/weights.json
+strategy/scanner.run.lock
 strategy/ml/data/raw/
 strategy/ml/data/processed/
 strategy/ml/data/live/

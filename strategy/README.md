@@ -81,6 +81,13 @@ strategy/
 └── scanner.log          # Last run output (auto-created)
 ```
 
+Local-only runtime and legacy files are intentionally ignored by Git:
+
+- `strategy/config.json` contains private Telegram settings; commit `strategy/config.example.json` instead.
+- `strategy/scanner.run.lock` is created while a scan is running so overlapping 15-minute triggers are skipped.
+- `strategy/trades.json`, `strategy/weights.json`, `strategy/ml/data/**`, and `strategy/ml/reports/**` are local learning/runtime state.
+- `alerts_log/` and root `rules.json` are legacy local files and are not used by the current scanner.
+
 ## Core ML / RNN layer
 
 The scanner calls a Python/PyTorch GRU sidecar after the rule-based setup is built. The model is a required neural gate:
@@ -100,15 +107,18 @@ strategy/ml/data/live/scan_signals.jsonl
 
 Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels and manual TP/SL outcomes, then trains a candidate RNN. The candidate is logged to `strategy/ml/reports/retrain_history.jsonl` and only replaces `strategy/ml/models/rnn.pt` when it meets the configured promotion metric.
 
-Data and model artifacts are ignored by Git:
+Runtime data and reports are ignored by Git:
 
 ```
 strategy/ml/data/raw/
 strategy/ml/data/processed/
 strategy/ml/data/live/
-strategy/ml/models/
 strategy/ml/reports/
 ```
+
+The active RNN is the tracked pair `strategy/ml/models/rnn.pt` and
+`strategy/ml/models/rnn.json`. `rnn.pt` is the PyTorch checkpoint used for
+inference; `rnn.json` is the human-readable summary for the same model.
 
 To enable the model in `config.json`:
 
