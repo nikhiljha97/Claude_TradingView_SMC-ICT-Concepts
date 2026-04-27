@@ -938,6 +938,14 @@ export function computeSignal({
   const atr15M = calcATR(bars15M, 14);
   let entry, sl, tp1, tp2, rr;
 
+  function actualRR(direction, entry, sl, target) {
+    const risk = Math.abs(Number(entry) - Number(sl));
+    const reward = direction === 'BUY'
+      ? Number(target) - Number(entry)
+      : Number(entry) - Number(target);
+    return risk > 0 && reward > 0 ? reward / risk : 0;
+  }
+
   if (direction === 'BUY') {
     entry = currentPrice;
     // Prefer OTE level or OB/FVG zone for SL anchor
@@ -949,7 +957,6 @@ export function computeSignal({
     const risk = entry - sl;
     tp1 = entry + risk * 2.5;
     tp2 = entry + risk * 4.0;
-    rr  = risk > 0 ? (tp1 - entry) / risk : 0;
     if (dailyPivots.R1 > entry && dailyPivots.R1 < tp2) tp1 = dailyPivots.R1;
     if (dailyPivots.R2 > tp1) tp2 = dailyPivots.R2;
     // ICT Fib extensions (1.272/1.618) of manipulation swing → TP targets
@@ -971,7 +978,6 @@ export function computeSignal({
     const risk = sl - entry;
     tp1 = entry - risk * 2.5;
     tp2 = entry - risk * 4.0;
-    rr  = risk > 0 ? (entry - tp1) / risk : 0;
     if (dailyPivots.S1 < entry && dailyPivots.S1 > tp2) tp1 = dailyPivots.S1;
     if (dailyPivots.S2 < tp1) tp2 = dailyPivots.S2;
     // ICT Fib extensions for bearish
@@ -986,6 +992,12 @@ export function computeSignal({
   }
 
   // ── 12. RR Filter + Bonus ─────────────────────────────────────────────────
+  rr = direction === 'NONE' ? 0 : actualRR(direction, entry, sl, tp1);
+  details.riskReward = {
+    actualRR: rr,
+    risk: Math.abs(Number(entry) - Number(sl)),
+    reward: direction === 'BUY' ? Number(tp1) - Number(entry) : Number(entry) - Number(tp1),
+  };
   if (rr < 2.5) direction = 'NONE';
   if (rr >= 3) {
     score.total += weights.rrBonus;
