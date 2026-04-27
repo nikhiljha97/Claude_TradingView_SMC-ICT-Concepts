@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -14,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from strategy.ml.common import PROCESSED_DIR, ensure_dirs, read_bars, write_rows
-from strategy.ml.features import load_gpr, load_news
+from strategy.ml.features import build_features, load_gpr, load_news
 from strategy.ml.labels import LABEL_FIELDS, label_rows
 from strategy.ml.train_rnn import train_model
 
@@ -27,6 +28,59 @@ def count_rows(path: Path) -> int:
 def load_csv_rows(path: Path) -> list[dict]:
     with path.open(newline="") as f:
         return list(csv.DictReader(f))
+
+
+def trade_outcome_rows(trade_log: str | None, live_dir: Path, gpr=None, news=None) -> list[dict]:
+    if not trade_log:
+        return []
+    path = Path(trade_log)
+    if not path.exists():
+        return []
+    try:
+        trades = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return []
+
+    bars_by_symbol = {}
+    features_by_symbol = {}
+    rows = []
+    for trade in trades:
+        outcome = trade.get("outcome")
+        direction = trade.get("direction")
+        symbol = trade.get("symbol")
+        if outcome not in {"TP", "SL"} or direction not in {"BUY", "SELL"} or not symbol:
+            continue
+        if symbol not in bars_by_symbol:
+            bars_path = live_dir / f"{symbol}_15.csv"
+            if not bars_path.exists():
+                continue
+            bars_by_symbol[symbol] = read_bars(bars_path)
+            features_by_symbol[symbol] = build_features(bars_by_symbol[symbol], gpr, news)
+        features = features_by_symbol.get(symbol) or []
+        if not features:
+            continue
+        try:
+            trade_ts = int(__import__("datetime").datetime.fromisoformat(trade["timestamp"].replace("Z", "+00:00")).timestamp() * 1000)
+        except Exception:
+            trade_ts = None
+        feat = None
+        if trade_ts is not None:
+            candidates = [row for row in features if int(row["timestamp"]) <= trade_ts]
+            feat = candidates[-1] if candidates else None
+        feat = feat or features[-1]
+        side = "long" if direction == "BUY" else "short"
+        rows.append({
+            **feat,
+            "side_long": 1.0 if side == "long" else 0.0,
+            "side_short": 1.0 if side == "short" else 0.0,
+            "side": side,
+            "tp": trade.get("tp1") or trade.get("tp2") or "",
+            "sl": trade.get("sl") or "",
+            "horizon": "manual",
+            "label": 1 if outcome == "TP" else 0,
+            "bars_to_event": "",
+        })
+    return rows
 
 
 def refresh_dataset(script_name: str, out_path: str | None) -> None:
@@ -45,6 +99,7 @@ def main() -> None:
     parser.add_argument("--refresh-gpr", action="store_true")
     parser.add_argument("--refresh-news", action="store_true")
     parser.add_argument("--seed-label", action="append", default=[])
+    parser.add_argument("--trade-log", default=None)
     parser.add_argument("--min-bars", type=int, default=250)
     parser.add_argument("--seq-len", type=int, default=32)
     parser.add_argument("--hidden", type=int, default=32)
@@ -85,6 +140,12 @@ def main() -> None:
             seed_path = Path(seed)
             if seed_path.exists():
                 all_rows.extend(load_csv_rows(seed_path))
+
+        manual_rows = trade_outcome_rows(args.trade_log, live_dir, gpr, news)
+        if manual_rows:
+            manual_path = PROCESSED_DIR / "manual_trade_outcome_labels.csv"
+            write_rows(manual_path, manual_rows, LABEL_FIELDS)
+            all_rows.extend(manual_rows)
 
         if len(all_rows) < args.seq_len + 500:
             print({"trained": False, "reason": "not_enough_labeled_rows", "rows": len(all_rows)})

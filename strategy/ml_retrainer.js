@@ -42,6 +42,7 @@ export function maybeStartRetraining(config) {
     path.join(__dirname, 'ml', 'retrain_live.py'),
     '--live-dir', liveDir,
     '--out', modelPath,
+    '--trade-log', resolveRepoPath(retrain.tradeLogPath || 'strategy/trades.json'),
     '--min-bars', String(retrain.minBars || 250),
     '--seq-len', String(retrain.seqLen || 32),
     '--hidden', String(retrain.hidden || 32),

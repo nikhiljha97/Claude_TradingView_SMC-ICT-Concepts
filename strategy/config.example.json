@@ -77,6 +77,7 @@
       "minHoursBetweenRuns": 1,
       "gprPath": "strategy/ml/data/raw/gpr/ai_gpr_data_daily.csv",
       "newsPath": "strategy/ml/data/raw/news/geopolitical_news_daily.csv",
+      "tradeLogPath": "strategy/trades.json",
       "refreshGpr": true,
       "refreshNews": true,
       "seedLabels": [
