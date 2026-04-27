@@ -98,7 +98,7 @@ strategy/ml/data/live/<SYMBOL>_<TF>.csv
 strategy/ml/data/live/scan_signals.jsonl
 ```
 
-Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels, and refreshes `strategy/ml/models/rnn.pt`.
+Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels and manual TP/SL outcomes, then trains a candidate RNN. The candidate is logged to `strategy/ml/reports/retrain_history.jsonl` and only replaces `strategy/ml/models/rnn.pt` when it meets the configured promotion metric.
 
 Data and model artifacts are ignored by Git:
 
@@ -125,7 +125,11 @@ To enable the model in `config.json`:
     "minBars": 250,
     "seqLen": 32,
     "hidden": 32,
-    "epochs": 3
+    "epochs": 3,
+    "historyPath": "strategy/ml/reports/retrain_history.jsonl",
+    "promotionMetric": "test_accuracy",
+    "minPromotionScore": 0.5,
+    "minPromotionDelta": 0
   }
 }
 ```

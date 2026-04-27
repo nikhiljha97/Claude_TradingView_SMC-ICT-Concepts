@@ -84,8 +84,12 @@
         "strategy/ml/data/processed/combined_core_labels.csv"
       ],
       "logPath": "strategy/ml/reports/retrain.log",
+      "historyPath": "strategy/ml/reports/retrain_history.jsonl",
       "statePath": "strategy/ml/reports/retrain_state.json",
-      "lockPath": "strategy/ml/models/retrain.lock"
+      "lockPath": "strategy/ml/models/retrain.lock",
+      "promotionMetric": "test_accuracy",
+      "minPromotionScore": 0.5,
+      "minPromotionDelta": 0
     }
   },
   "weights": {

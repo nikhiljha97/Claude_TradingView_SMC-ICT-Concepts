@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import random
 import sys
 from pathlib import Path
@@ -69,6 +70,56 @@ def normalize_sequences(xs):
     return norm, means, stds
 
 
+def binary_auc(labels: list[int], probs: list[float]) -> float | None:
+    positives = sum(1 for label in labels if label == 1)
+    negatives = len(labels) - positives
+    if positives == 0 or negatives == 0:
+        return None
+
+    ordered = sorted(zip(probs, labels), key=lambda item: item[0])
+    rank = 1
+    pos_rank_sum = 0.0
+    i = 0
+    while i < len(ordered):
+        j = i + 1
+        while j < len(ordered) and ordered[j][0] == ordered[i][0]:
+            j += 1
+        avg_rank = (rank + rank + (j - i) - 1) / 2
+        pos_rank_sum += sum(avg_rank for _, label in ordered[i:j] if label == 1)
+        rank += j - i
+        i = j
+
+    return (pos_rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
+
+
+def classification_metrics(labels: list[int], probs: list[float]) -> dict:
+    preds = [1 if prob >= 0.5 else 0 for prob in probs]
+    total = max(1, len(labels))
+    tp = sum(1 for pred, label in zip(preds, labels) if pred == 1 and label == 1)
+    tn = sum(1 for pred, label in zip(preds, labels) if pred == 0 and label == 0)
+    fp = sum(1 for pred, label in zip(preds, labels) if pred == 1 and label == 0)
+    fn = sum(1 for pred, label in zip(preds, labels) if pred == 0 and label == 1)
+    eps = 1e-7
+    log_loss = -sum(
+        label * math.log(min(1 - eps, max(eps, prob))) +
+        (1 - label) * math.log(min(1 - eps, max(eps, 1 - prob)))
+        for label, prob in zip(labels, probs)
+    ) / total
+    brier = sum((prob - label) ** 2 for label, prob in zip(labels, probs)) / total
+    return {
+        "accuracy": (tp + tn) / total,
+        "precision": tp / max(1, tp + fp),
+        "recall": tp / max(1, tp + fn),
+        "auc": binary_auc(labels, probs),
+        "log_loss": log_loss,
+        "brier": brier,
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+    }
+
+
 def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_size: int, out_path: str):
     torch, nn = require_torch()
     ensure_dirs()
@@ -119,8 +170,10 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
     model.eval()
     with torch.no_grad():
         probs = torch.sigmoid(model(x_test))
-        preds = probs >= 0.5
-        accuracy = (preds.float() == y_test).float().mean().item()
+        probs_list = [float(value) for value in probs.view(-1).tolist()]
+        y_test_list = [int(value) for value in y_test.view(-1).tolist()]
+        metrics = classification_metrics(y_test_list, probs_list)
+        accuracy = metrics["accuracy"]
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -132,6 +185,7 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
         "seq_len": seq_len,
         "hidden": hidden,
         "test_accuracy": accuracy,
+        "metrics": metrics,
     }
     torch.save(checkpoint, out)
     summary = {
@@ -140,6 +194,9 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
         "seq_len": seq_len,
         "hidden": hidden,
         "test_accuracy": accuracy,
+        "metrics": metrics,
+        "train_samples": len(x_train),
+        "test_samples": len(x_test),
     }
     save_json(out.with_suffix(".json"), summary)
     print(out)

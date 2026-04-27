@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime as dt
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -90,6 +93,50 @@ def refresh_dataset(script_name: str, out_path: str | None) -> None:
     subprocess.run([sys.executable, str(script), "--out", out_path], check=False)
 
 
+def read_model_summary(model_path: Path) -> dict:
+    summary_path = model_path.with_suffix(".json")
+    if not summary_path.exists():
+        return {}
+    try:
+        return json.loads(summary_path.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def append_history(history_path: str | None, event: dict) -> None:
+    if not history_path:
+        return
+    path = Path(history_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(event, sort_keys=True) + "\n")
+
+
+def metric_value(summary: dict, metric: str) -> float | None:
+    if metric == "test_accuracy":
+        value = summary.get("test_accuracy")
+    else:
+        value = (summary.get("metrics") or {}).get(metric)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def promote_candidate(candidate_path: Path, active_path: Path) -> None:
+    active_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(candidate_path), str(active_path))
+    candidate_summary = candidate_path.with_suffix(".json")
+    if candidate_summary.exists():
+        shutil.move(str(candidate_summary), str(active_path.with_suffix(".json")))
+
+
+def remove_candidate(candidate_path: Path) -> None:
+    for path in (candidate_path, candidate_path.with_suffix(".json")):
+        if path.exists():
+            path.unlink()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live-dir", required=True)
@@ -106,6 +153,10 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--lock", default=None)
+    parser.add_argument("--history", default=None)
+    parser.add_argument("--promotion-metric", default="test_accuracy")
+    parser.add_argument("--min-promotion-score", type=float, default=0.5)
+    parser.add_argument("--min-promotion-delta", type=float, default=0.0)
     args = parser.parse_args()
 
     ensure_dirs()
@@ -153,15 +204,44 @@ def main() -> None:
 
         combined = PROCESSED_DIR / "live_retrain_labels.csv"
         write_rows(combined, all_rows, LABEL_FIELDS)
+        active_path = Path(args.out)
+        candidate_path = active_path.with_name(f"{active_path.stem}.candidate.{os.getpid()}{active_path.suffix}")
+        current_summary = read_model_summary(active_path)
         report = train_model(
             str(combined),
             seq_len=args.seq_len,
             hidden=args.hidden,
             epochs=args.epochs,
             batch_size=args.batch_size,
-            out_path=args.out,
+            out_path=str(candidate_path),
         )
-        print({"trained": True, "rows": len(all_rows), "report": report})
+        current_score = metric_value(current_summary, args.promotion_metric)
+        candidate_score = metric_value(report, args.promotion_metric)
+        min_required = max(
+            args.min_promotion_score,
+            (current_score + args.min_promotion_delta) if current_score is not None else args.min_promotion_score,
+        )
+        promoted = candidate_score is not None and candidate_score >= min_required
+        reason = "promoted" if promoted else "candidate_below_threshold"
+        if promoted:
+            promote_candidate(candidate_path, active_path)
+        else:
+            remove_candidate(candidate_path)
+
+        event = {
+            "timestamp": dt.datetime.now(dt.UTC).isoformat(),
+            "rows": len(all_rows),
+            "manualRows": len(manual_rows),
+            "metric": args.promotion_metric,
+            "currentScore": current_score,
+            "candidateScore": candidate_score,
+            "minRequired": min_required,
+            "promoted": promoted,
+            "reason": reason,
+            "report": report,
+        }
+        append_history(args.history, event)
+        print({"trained": True, "rows": len(all_rows), "promoted": promoted, "reason": reason, "report": report})
     finally:
         if lock and lock.exists():
             lock.unlink()

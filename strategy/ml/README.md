@@ -87,6 +87,13 @@ python -m strategy.ml.data_sources.news
 Hourly live retraining refreshes both datasets when `refreshGpr` and
 `refreshNews` are enabled in `strategy/config.json`.
 
+Each retrain writes a promotion event to
+`strategy/ml/reports/retrain_history.jsonl`. The hourly job trains a
+candidate model first, compares it with the active model using
+`promotionMetric` (default `test_accuracy`), and promotes the candidate only
+when it reaches `minPromotionScore` and beats the current model by at least
+`minPromotionDelta`.
+
 ## Scanner Integration
 
 The scanner integration is optional and controlled by `config.json`:

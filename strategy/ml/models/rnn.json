@@ -52,6 +52,6 @@
   ],
   "hidden": 32,
   "seq_len": 32,
-  "test_accuracy": 0.7197197079658508,
+  "test_accuracy": 0.7368935942649841,
   "type": "gru"
 }
