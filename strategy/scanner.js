@@ -29,9 +29,41 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, 'config.json');
+const RUN_LOCK_PATH = path.join(__dirname, 'scanner.run.lock');
+const SCAN_SEPARATOR = '============================================================';
 
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
 function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); }
+
+function acquireRunLock() {
+  try {
+    fs.writeFileSync(RUN_LOCK_PATH, JSON.stringify({
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+    }), { flag: 'wx' });
+    return true;
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    try {
+      const lock = JSON.parse(fs.readFileSync(RUN_LOCK_PATH, 'utf8'));
+      const ageMs = Date.now() - new Date(lock.startedAt).getTime();
+      if (Number.isFinite(ageMs) && ageMs > 14 * 60 * 1000) {
+        fs.unlinkSync(RUN_LOCK_PATH);
+        return acquireRunLock();
+      }
+      console.log(`\n\n\n${SCAN_SEPARATOR}\n${SCAN_SEPARATOR}`);
+      console.log(`[scanner] Previous scan still running pid=${lock.pid || 'unknown'} started=${lock.startedAt || 'unknown'} — skipping this trigger.`);
+      return false;
+    } catch {
+      fs.unlinkSync(RUN_LOCK_PATH);
+      return acquireRunLock();
+    }
+  }
+}
+
+function releaseRunLock() {
+  try { fs.unlinkSync(RUN_LOCK_PATH); } catch {}
+}
 
 function isWeekendSession(now = new Date()) {
   // Weekend session: Fri 17:00 EST → Sun 18:00 EST (crypto-only watchlist)
@@ -241,11 +273,13 @@ async function scanSymbol(pair, config, weights) {
 }
 
 async function main() {
+  if (!acquireRunLock()) return;
   const config = loadConfig();
   const weights = loadWeights(config.weights);
   const startTime = Date.now();
   const estTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  console.log(`[scanner] === Cycle started at ${estTime} EST ===`);
+  console.log(`\n\n\n${SCAN_SEPARATOR}\n${SCAN_SEPARATOR}`);
+  console.log(`[scanner] === NEW SCAN started at ${estTime} EST ===`);
 
   // 1. Process any pending Telegram feedback first
   try {
@@ -285,9 +319,11 @@ async function main() {
   }
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[scanner] === Cycle complete in ${elapsed}s, ${alerts.length} alert(s) fired ===`);
+  releaseRunLock();
 }
 
 main().catch(err => {
   console.error('[scanner] Fatal:', err);
+  releaseRunLock();
   process.exit(1);
 });
