@@ -35,6 +35,17 @@ const SCAN_SEPARATOR = '========================================================
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
 function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); }
 
+function pidIsRunning(pid) {
+  const numeric = Number(pid);
+  if (!Number.isInteger(numeric) || numeric <= 0) return false;
+  try {
+    process.kill(numeric, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function acquireRunLock() {
   try {
     fs.writeFileSync(RUN_LOCK_PATH, JSON.stringify({
@@ -47,6 +58,10 @@ function acquireRunLock() {
     try {
       const lock = JSON.parse(fs.readFileSync(RUN_LOCK_PATH, 'utf8'));
       const ageMs = Date.now() - new Date(lock.startedAt).getTime();
+      if (!pidIsRunning(lock.pid)) {
+        fs.unlinkSync(RUN_LOCK_PATH);
+        return acquireRunLock();
+      }
       if (Number.isFinite(ageMs) && ageMs > 14 * 60 * 1000) {
         fs.unlinkSync(RUN_LOCK_PATH);
         return acquireRunLock();
