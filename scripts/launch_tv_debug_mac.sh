@@ -6,6 +6,7 @@ PORT="${1:-9222}"
 
 # Auto-detect TradingView install location
 APP=""
+APP_BUNDLE=""
 LOCATIONS=(
   "/Applications/TradingView.app/Contents/MacOS/TradingView"
   "$HOME/Applications/TradingView.app/Contents/MacOS/TradingView"
@@ -14,23 +15,24 @@ LOCATIONS=(
 for loc in "${LOCATIONS[@]}"; do
   if [ -f "$loc" ]; then
     APP="$loc"
+    APP_BUNDLE="${loc%/Contents/MacOS/TradingView}"
     break
   fi
 done
 
 # Fallback: search with mdfind (Spotlight)
 if [ -z "$APP" ]; then
-  APP=$(mdfind "kMDItemCFBundleIdentifier == 'com.niceincontact.TradingView'" 2>/dev/null | head -1)
-  if [ -n "$APP" ]; then
-    APP="$APP/Contents/MacOS/TradingView"
+  APP_BUNDLE=$(mdfind "kMDItemCFBundleIdentifier == 'com.niceincontact.TradingView'" 2>/dev/null | head -1)
+  if [ -n "$APP_BUNDLE" ]; then
+    APP="$APP_BUNDLE/Contents/MacOS/TradingView"
   fi
 fi
 
 # Fallback: find any TradingView.app
 if [ -z "$APP" ] || [ ! -f "$APP" ]; then
-  APP=$(find /Applications "$HOME/Applications" -name "TradingView.app" -maxdepth 2 2>/dev/null | head -1)
-  if [ -n "$APP" ]; then
-    APP="$APP/Contents/MacOS/TradingView"
+  APP_BUNDLE=$(find /Applications "$HOME/Applications" -name "TradingView.app" -maxdepth 2 2>/dev/null | head -1)
+  if [ -n "$APP_BUNDLE" ]; then
+    APP="$APP_BUNDLE/Contents/MacOS/TradingView"
   fi
 fi
 
@@ -49,8 +51,14 @@ sleep 1
 
 echo "Found TradingView at: $APP"
 echo "Launching with --remote-debugging-port=$PORT ..."
-"$APP" --remote-debugging-port=$PORT &
-TV_PID=$!
+if [ -n "$APP_BUNDLE" ] && [ -d "$APP_BUNDLE" ]; then
+  open -na "$APP_BUNDLE" --args --remote-debugging-port="$PORT"
+  sleep 1
+  TV_PID=$(pgrep -f "$APP.*remote-debugging-port=$PORT" | head -1)
+else
+  nohup "$APP" --remote-debugging-port="$PORT" >/tmp/tradingview_debug.log 2>&1 &
+  TV_PID=$!
+fi
 echo "PID: $TV_PID"
 
 # Wait for CDP to be ready

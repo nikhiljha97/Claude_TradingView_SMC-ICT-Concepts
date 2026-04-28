@@ -154,7 +154,7 @@ case "${1:-}" in
     status
     ;;
   logs)
-    tail -f "$REPO_ROOT/strategy/scanner.log"
+    tail -f "$REPO_ROOT/strategy/scanner.log" "$REPO_ROOT/strategy/scanner.error.log"
     ;;
   keep-awake-on)
     keep_awake_on
