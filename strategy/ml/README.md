@@ -92,18 +92,23 @@ Hourly live retraining refreshes both datasets when `refreshGpr` and
 
 ## Manual Outcome Feedback
 
-Telegram replies such as `TP HIT <id>` and `SL HIT <id>` become manual labels
-on the next retrain. Replies can include an exact exit price:
+Telegram replies such as `TP1 HIT <id>`, `TP2 HIT <id>`, `TP3 HIT <id>`, and
+`SL HIT <id>` become manual outcome data on the next retrain. Replies can
+include an exact exit price:
 
 ```text
-TP HIT a3f9c1d2 216.25
+TP1 HIT a3f9c1d2 216.25
+TP2 HIT a3f9c1d2 217.40
+TP3 HIT a3f9c1d2 219.10
 SL HIT a3f9c1d2 215.01
 ```
 
-When no exit price is supplied, retraining uses the planned TP1 or SL as the
-approximate exit. The trade log stores duration, duration in 15-minute bars,
-pips/points captured, and realized R. These values are outcome metadata and
-sample-weighting material, not live input features for the same trade.
+When no exit price is supplied, retraining uses the planned TP level or SL as
+the approximate exit. TP1/TP2 are stored as partial milestones; the final TP3
+or SL result is used as the closed-trade label. The trade log stores duration,
+duration in 15-minute bars, pips/points captured, realized R, and partial-hit
+history. These values are outcome metadata and sample-weighting material, not
+live input features for the same trade.
 
 ## Confluence Feature Families
 
@@ -147,7 +152,7 @@ The scanner integration is optional and controlled by `config.json`:
   "enabled": false,
   "python": "python3",
   "modelPath": "strategy/ml/models/baseline.json",
-  "minProbability": 0.55,
+  "minProbability": 0.42,
   "failOpen": true
 }
 ```

@@ -37,7 +37,7 @@ For a layperson:
 - The system checks charts every 15 minutes.
 - It only sends a Telegram alert when the setup passes multiple filters.
 - It asks you whether you took the trade.
-- If you later reply `TP HIT <tradeId>` or `SL HIT <tradeId>`, that outcome becomes learning data.
+- If you later reply `TP1 HIT <tradeId>`, `TP2 HIT <tradeId>`, `TP3 HIT <tradeId>`, or `SL HIT <tradeId>`, that outcome becomes learning data.
 
 For a software engineer:
 
@@ -146,7 +146,7 @@ Promotion currently uses `utility_score`, which combines AUC, balanced accuracy,
 When an alert fires, the message includes:
 
 - Symbol and direction
-- Entry, stop, TP1, TP2
+- Entry, stop, TP1, TP2, TP3
 - Risk/reward
 - Confidence and score breakdown
 - Setup reasoning
@@ -159,14 +159,14 @@ Reply examples:
 ```text
 YES abc123
 NO abc123
-TP HIT abc123
+TP1 HIT abc123
+TP2 HIT abc123
+TP3 HIT abc123
 SL HIT abc123
-TP HIT abc123 216.25
+TP2 HIT abc123 216.25
 ```
 
-The optional number is the exact exit price. If you omit it, the system uses
-the planned TP1 or SL as the approximate exit. Closed trades store duration,
-pips/points captured, and realized R for retraining/evaluation.
+The optional number is the exact exit price. TP1 is the 1R partial where you book half and move SL to breakeven, TP2 is 2R, and TP3 is the final optimized target. Closed trades store duration, pips/points captured, realized R, and the TP level history for retraining/evaluation.
 
 Commands:
 

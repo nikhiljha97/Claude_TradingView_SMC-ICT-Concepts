@@ -144,7 +144,7 @@ To enable the model in `config.json`:
   "enabled": true,
   "python": ".venv/bin/python",
   "modelPath": "strategy/ml/models/rnn.pt",
-  "minProbability": 0.55,
+  "minProbability": 0.42,
   "failOpen": false,
   "timeoutMs": 8000,
   "retrain": {
@@ -207,12 +207,14 @@ launchctl unload ~/Library/LaunchAgents/com.tradingview.scanner.plist
 Every alert includes a short trade ID like `a3f9c1d2`. When the trade closes:
 
 ```
-TP HIT a3f9c1d2     ← reply in Telegram
+TP1 HIT a3f9c1d2    ← first partial at 1R
+TP2 HIT a3f9c1d2    ← second partial at 2R
+TP3 HIT a3f9c1d2    ← final target
 SL HIT a3f9c1d2
-TP HIT a3f9c1d2 216.25  ← optional exact exit price
+TP2 HIT a3f9c1d2 216.25  ← optional exact exit price
 ```
 
-The next scan cycle picks up the reply, marks the trade in `trades.json`, stores outcome duration, approximate or exact exit price, pips/points captured, and realized R, then updates EWMA edge for **every component that contributed to that signal**. Components with consistently high edge get scaled up; weak ones decay. Adjustments only kick in after 5+ samples per component.
+The next scan cycle picks up the reply, stores partial TP milestones in `trades.json`, and uses the final `TP3` or `SL` result for closed-trade learning. If TP1 has been hit and you later reply `SL HIT`, the system treats the stop as breakeven for outcome metrics because the plan has moved SL to BE.
 
 Trade duration is not used as a live feature for the same signal because that would leak future information. It is stored as outcome metadata and used in retraining/evaluation so the model can learn which historical setup types resolved efficiently versus slowly or poorly.
 

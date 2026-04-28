@@ -38,12 +38,21 @@ function pipSize(symbol = '') {
   return 0.0001;
 }
 
+function targetForOutcome(trade, outcome) {
+  if (outcome === 'TP1') return numberOrNull(trade.tp1);
+  if (outcome === 'TP2') return numberOrNull(trade.tp2);
+  if (outcome === 'TP3' || outcome === 'TP') return numberOrNull(trade.tp3 ?? trade.tp2 ?? trade.tp1);
+  if (outcome === 'SL' && Array.isArray(trade.partialHits) && trade.partialHits.some(hit => hit.level === 'TP1')) {
+    return numberOrNull(trade.entry);
+  }
+  return numberOrNull(trade.sl);
+}
+
 export function computeOutcomeMetrics(trade, outcome, exitPrice = null, outcomeAt = new Date()) {
   const entry = numberOrNull(trade.entry);
   const sl = numberOrNull(trade.sl);
-  const tp = numberOrNull(trade.tp1 ?? trade.tp2);
   const explicitExit = numberOrNull(exitPrice);
-  const fallbackExit = outcome === 'TP' ? tp : sl;
+  const fallbackExit = targetForOutcome(trade, outcome);
   const finalExit = explicitExit ?? fallbackExit;
   const sign = trade.direction === 'SELL' ? -1 : 1;
   const risk = entry != null && sl != null ? Math.abs(entry - sl) : null;
@@ -58,6 +67,7 @@ export function computeOutcomeMetrics(trade, outcome, exitPrice = null, outcomeA
 
   return {
     exitPrice: finalExit,
+    outcomeLevel: outcome,
     outcomePriceSource: explicitExit != null ? 'telegram_exit_price' : (fallbackExit != null ? 'planned_level' : 'unknown'),
     priceMove,
     pipsCaptured: priceMove != null ? priceMove / size : null,
@@ -158,6 +168,7 @@ export function logAlert(signal) {
     sl: signal.sl,
     tp1: signal.tp1,
     tp2: signal.tp2,
+    tp3: signal.tp3,
     rr: signal.rr,
     score: signal.score,
     maxScore: signal.maxScore,
@@ -166,7 +177,8 @@ export function logAlert(signal) {
     htfAlignment: signal.htfAlignment,
     activeComponents: Object.keys(signal.breakdown).filter(k => signal.breakdown[k] > 0),
     confirmed: null, // null=awaiting, true=took trade, false=skipped
-    outcome: null,   // 'TP' | 'SL' | null
+    partialHits: [],
+    outcome: null,   // 'TP3' | 'TP' | 'SL' | null
     outcomeAt: null,
   };
   trades.push(trade);
@@ -181,17 +193,46 @@ export function applyFeedback(tradeId, outcome, weights, exitPrice = null) {
   const trades = loadTrades();
   const trade = trades.find(t => t.tradeId === tradeId);
   if (!trade) return { ok: false, error: `Trade ${tradeId} not found.` };
-  if (trade.outcome) return { ok: false, error: `Trade ${tradeId} already logged as ${trade.outcome}.` };
+  const normalized = outcome === 'TP' ? 'TP3' : outcome;
+  const partialLevels = new Set(['TP1', 'TP2']);
+  if (trade.outcome && !partialLevels.has(normalized)) {
+    return { ok: false, error: `Trade ${tradeId} already logged as ${trade.outcome}.` };
+  }
 
   const outcomeAt = new Date();
-  const metrics = computeOutcomeMetrics(trade, outcome, exitPrice, outcomeAt);
-  trade.outcome = outcome;
-  trade.outcomeAt = outcomeAt.toISOString();
+  const metrics = computeOutcomeMetrics(trade, normalized, exitPrice, outcomeAt);
   trade.confirmed = true; // TP/SL reply implies they took the trade
-  trade.confirmedAt = trade.confirmedAt || trade.outcomeAt;
+  trade.confirmedAt = trade.confirmedAt || outcomeAt.toISOString();
+  trade.partialHits = Array.isArray(trade.partialHits) ? trade.partialHits : [];
+  if (partialLevels.has(normalized)) {
+    if (trade.partialHits.some(hit => hit.level === normalized)) {
+      return { ok: false, error: `Trade ${tradeId} already logged ${normalized}.` };
+    }
+    trade.partialHits.push({
+      level: normalized,
+      timestamp: outcomeAt.toISOString(),
+      ...metrics,
+    });
+    trade.lastPartial = normalized;
+    trade.lastPartialAt = outcomeAt.toISOString();
+    saveTrades(trades);
+    return {
+      ok: true,
+      partial: true,
+      trade,
+      metrics,
+      stats: {
+        totalTrades: weights.totalTrades || 0,
+        winRate: weights.totalTrades > 0 ? (weights.wins / weights.totalTrades * 100).toFixed(1) + '%' : 'n/a',
+      }
+    };
+  }
+
+  trade.outcome = normalized;
+  trade.outcomeAt = outcomeAt.toISOString();
   Object.assign(trade, metrics);
   saveTrades(trades);
-  const win = outcome === 'TP' ? 1 : 0;
+  const win = normalized === 'TP3' ? 1 : 0;
   weights.totalTrades = (weights.totalTrades || 0) + 1;
   weights.wins   = (weights.wins   || 0) + win;
   weights.losses = (weights.losses || 0) + (1 - win);
@@ -206,6 +247,7 @@ export function applyFeedback(tradeId, outcome, weights, exitPrice = null) {
   return {
     ok: true,
     trade,
+    metrics,
     stats: {
       totalTrades: weights.totalTrades,
       winRate: weights.totalTrades > 0 ? (weights.wins / weights.totalTrades * 100).toFixed(1) + '%' : 'n/a',

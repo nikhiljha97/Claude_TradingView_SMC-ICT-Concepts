@@ -5,6 +5,10 @@ import { computeOutcomeMetrics } from '../strategy/learning.js';
 
 describe('trade feedback outcome accounting', () => {
   it('parses TP/SL feedback with optional exact exit price', () => {
+    assert.deepEqual(parseFeedback('TP1 HIT a1b2c3d4'), {
+      outcome: 'TP1',
+      tradeId: 'a1b2c3d4',
+    });
     assert.deepEqual(parseFeedback('TP HIT a1b2c3d4'), {
       outcome: 'TP',
       tradeId: 'a1b2c3d4',
@@ -27,9 +31,11 @@ describe('trade feedback outcome accounting', () => {
       direction: 'BUY',
       entry: 1.1,
       sl: 1.095,
-      tp1: 1.1125,
+      tp1: 1.105,
+      tp2: 1.11,
+      tp3: 1.1125,
     };
-    const metrics = computeOutcomeMetrics(trade, 'TP', null, new Date('2026-01-01T01:30:00.000Z'));
+    const metrics = computeOutcomeMetrics(trade, 'TP3', null, new Date('2026-01-01T01:30:00.000Z'));
     assert.equal(metrics.outcomePriceSource, 'planned_level');
     assert.equal(metrics.durationMinutes, 90);
     assert.equal(metrics.durationBars15m, 6);
@@ -48,6 +54,7 @@ describe('trade feedback outcome accounting', () => {
       sl: 1.095,
       tp1: 1.1125,
       tp2: 1.12,
+      tp3: 1.125,
       rr: 2.5,
       score: 8,
       maxScore: 13.2,
@@ -58,5 +65,7 @@ describe('trade feedback outcome accounting', () => {
     const lines = text.split('\n');
     assert.match(lines[0], /^🚨 ❗❗❗ 🟢 BUY \*OANDA:EURUSD\*/);
     assert.equal(lines[1], '*Exchange:* `OANDA` | *Symbol:* `EURUSD`');
+    assert.match(text, /\*TP1:\*.*1:1 partial/);
+    assert.match(text, /\*TP3:\*.*final/);
   });
 });

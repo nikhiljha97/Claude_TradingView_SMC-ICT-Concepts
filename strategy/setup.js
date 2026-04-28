@@ -25,7 +25,7 @@ async function main() {
     await sendMessage(token, config.telegram.chat_id,
       '🤖 *Trading Scanner connected!*\n\nYou will receive 15M signal alerts here.\n\n' +
       '*Reply commands:*\n' +
-      '`TP HIT <id>` — log a winning trade\n' +
+      '`TP1 HIT <id>` / `TP2 HIT <id>` / `TP3 HIT <id>` — log partial/final targets\n' +
       '`SL HIT <id>` — log a losing trade\n' +
       '`/stats` — performance breakdown\n' +
       '`/trades` — recent alerts');
@@ -49,7 +49,7 @@ async function main() {
           '🤖 *Trading Scanner connected!*\n\n' +
           'You will receive 15M alerts for: BTCUSDT, ETHUSDT, XRPUSDT, SOLUSDT, XAUUSD\n\n' +
           '*Reply commands:*\n' +
-          '`TP HIT <id>` / `SL HIT <id>` — log outcome\n' +
+          '`TP1 HIT <id>` / `TP2 HIT <id>` / `TP3 HIT <id>` / `SL HIT <id>` — log outcome\n' +
           '`/stats` — performance breakdown\n' +
           '`/trades` — recent alerts');
         console.log('✓ Setup complete!');

@@ -136,8 +136,9 @@ export function formatAlert(signal) {
     ``,
     `*Entry:* \`${fmt(signal.entry)}\``,
     `*Stop:*  \`${fmt(signal.sl)}\``,
-    `*TP1:*   \`${fmt(signal.tp1)}\`  _(1:${signal.rr})_`,
-    `*TP2:*   \`${fmt(signal.tp2)}\``,
+    `*TP1:*   \`${fmt(signal.tp1)}\`  _(1:1 partial, book 1/2 + move SL to BE)_`,
+    `*TP2:*   \`${fmt(signal.tp2)}\`  _(1:2 partial)_`,
+    `*TP3:*   \`${fmt(signal.tp3)}\`  _(final 1:${signal.rr})_`,
     ...(fibLines.length ? fibLines : []),
     ``,
     `*Confidence:* ${signal.score}/${signal.maxScore.toFixed(1)}`,
@@ -151,19 +152,20 @@ export function formatAlert(signal) {
     `_Did you take this trade?_`,
     `\`YES ${signal.tradeId}\` _→ activates cooldown (won't re-alert same setup)_`,
     `\`NO ${signal.tradeId}\` _→ skipped (will re-alert if setup holds)_`,
-    `_Once in trade:_ \`TP HIT ${signal.tradeId}\` _or_ \`SL HIT ${signal.tradeId}\``,
-    `_Optional exact exit:_ \`TP HIT ${signal.tradeId} 216.25\``,
+    `_Once in trade:_ \`TP1 HIT ${signal.tradeId}\`, \`TP2 HIT ${signal.tradeId}\`, \`TP3 HIT ${signal.tradeId}\`, or \`SL HIT ${signal.tradeId}\``,
+    `_Optional exact exit:_ \`TP2 HIT ${signal.tradeId} 216.25\``,
   ].join('\n');
 }
 
 /**
- * Parse a feedback message: "TP HIT abc123", "SL HIT xyz789", or with an
- * optional exact exit price: "TP HIT abc123 216.25".
- * Returns { outcome: 'TP'|'SL', tradeId, exitPrice? } or null.
+ * Parse a feedback message: "TP1 HIT abc123", "TP2 HIT abc123",
+ * "TP3 HIT abc123", "TP HIT abc123", "SL HIT xyz789", or with an
+ * optional exact exit price: "TP2 HIT abc123 216.25".
+ * Returns { outcome: 'TP1'|'TP2'|'TP3'|'TP'|'SL', tradeId, exitPrice? } or null.
  */
 export function parseFeedback(text) {
   if (!text) return null;
-  const m = text.trim().match(/^(TP|SL)\s+HIT\s+([a-z0-9]+)(?:\s+@?\s*([-+]?\d+(?:\.\d+)?))?/i);
+  const m = text.trim().match(/^(TP[123]?|SL)\s+HIT\s+([a-z0-9]+)(?:\s+@?\s*([-+]?\d+(?:\.\d+)?))?/i);
   if (!m) return null;
   const exitPrice = m[3] != null ? Number(m[3]) : null;
   return {

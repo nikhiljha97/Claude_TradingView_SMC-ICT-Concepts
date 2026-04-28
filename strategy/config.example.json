@@ -5,26 +5,111 @@
     "last_update_id": 0
   },
   "weekdayPairs": [
-    { "symbol": "EURUSD",  "name": "Euro/Dollar", "exchange": "OANDA" },
-    { "symbol": "GBPUSD",  "name": "Cable" },
-    { "symbol": "USDCAD",  "name": "Dollar/CAD" },
-    { "symbol": "EURCAD",  "name": "Euro/CAD" },
-    { "symbol": "GBPCAD",  "name": "Cable/CAD" },
-    { "symbol": "XAUUSD",  "name": "Gold" },
-    { "symbol": "NAS100",  "name": "Nasdaq 100" },
-    { "symbol": "SPX500",  "name": "S&P 500" },
-    { "symbol": "US30",    "name": "Dow Jones" },
-    { "symbol": "USOIL",   "name": "WTI Crude" },
-    { "symbol": "BTCUSDT", "name": "Bitcoin" },
-    { "symbol": "USDJPY",  "name": "Dollar/Yen" },
-    { "symbol": "GBPJPY",  "name": "Cable/Yen" }
+    {
+      "symbol": "EURUSD",
+      "name": "Euro/Dollar",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "GBPUSD",
+      "name": "Cable"
+    },
+    {
+      "symbol": "USDCAD",
+      "name": "Dollar/CAD"
+    },
+    {
+      "symbol": "EURCAD",
+      "name": "Euro/CAD"
+    },
+    {
+      "symbol": "GBPCAD",
+      "name": "Cable/CAD"
+    },
+    {
+      "symbol": "XAUUSD",
+      "name": "Gold"
+    },
+    {
+      "symbol": "NAS100",
+      "name": "Nasdaq 100"
+    },
+    {
+      "symbol": "SPX500",
+      "name": "S&P 500"
+    },
+    {
+      "symbol": "US30",
+      "name": "Dow Jones"
+    },
+    {
+      "symbol": "USOIL",
+      "name": "WTI Crude"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "name": "Bitcoin"
+    },
+    {
+      "symbol": "USDJPY",
+      "name": "Dollar/Yen"
+    },
+    {
+      "symbol": "GBPJPY",
+      "name": "Cable/Yen"
+    },
+    {
+      "symbol": "NZDCAD",
+      "name": "NZD/CAD",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "USDCHF",
+      "name": "Dollar/Swiss",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "AUDCAD",
+      "name": "AUD/CAD",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "AUDUSD",
+      "name": "Aussie/Dollar",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "AUDJPY",
+      "name": "Aussie/Yen",
+      "exchange": "OANDA"
+    },
+    {
+      "symbol": "NZDJPY",
+      "name": "NZD/Yen",
+      "exchange": "OANDA"
+    }
   ],
   "weekendPairs": [
-    { "symbol": "BTCUSDT", "name": "Bitcoin" },
-    { "symbol": "ETHUSDT", "name": "Ethereum" },
-    { "symbol": "XRPUSDT", "name": "XRP" },
-    { "symbol": "SOLUSDT", "name": "Solana" },
-    { "symbol": "ETCUSDT", "name": "Ethereum Classic" }
+    {
+      "symbol": "BTCUSDT",
+      "name": "Bitcoin"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "name": "Ethereum"
+    },
+    {
+      "symbol": "XRPUSDT",
+      "name": "XRP"
+    },
+    {
+      "symbol": "SOLUSDT",
+      "name": "Solana"
+    },
+    {
+      "symbol": "ETCUSDT",
+      "name": "Ethereum Classic"
+    }
   ],
   "strategy": {
     "minRR": 2.5,
@@ -67,7 +152,7 @@
     "enabled": true,
     "python": ".venv/bin/python",
     "modelPath": "strategy/ml/models/rnn.pt",
-    "minProbability": 0.45,
+    "minProbability": 0.42,
     "probeWhenNoSignal": true,
     "failOpen": false,
     "timeoutMs": 30000,
@@ -103,12 +188,12 @@
     "structureConfirm": 1.5,
     "pivotConfluence": 1,
     "rrBonus": 1,
-    "ictKillzone": 1.0,
+    "ictKillzone": 1,
     "ictOTE": 0.75,
     "ictNDOG": 0.5,
-    "fourHBias": 1.0,
-    "dailyBias": 1.0,
-    "weeklyTemplate": 1.0,
+    "fourHBias": 1,
+    "dailyBias": 1,
+    "weeklyTemplate": 1,
     "additionalConfluence": 0.75
   }
 }

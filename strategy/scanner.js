@@ -158,7 +158,7 @@ async function processFeedback(config, weights) {
         const t = result.trade;
         const pair = `${t.symbol} ${t.direction}`;
         const reply = conf.took
-          ? `✅ *${pair}* \`${conf.tradeId}\` marked as *taken* — cooldown active, won't re-alert this setup.\nReply \`TP HIT ${conf.tradeId}\` or \`SL HIT ${conf.tradeId}\` when done.`
+          ? `✅ *${pair}* \`${conf.tradeId}\` marked as *taken* — cooldown active, won't re-alert this setup.\nReply \`TP1 HIT ${conf.tradeId}\`, \`TP2 HIT ${conf.tradeId}\`, \`TP3 HIT ${conf.tradeId}\`, or \`SL HIT ${conf.tradeId}\`.`
           : `⏭ *${pair}* \`${conf.tradeId}\` marked as *skipped* — will re-alert if setup holds next cycle.`;
         await sendMessage(config.telegram.token, msg.chat.id, reply);
       } else {
@@ -172,11 +172,13 @@ async function processFeedback(config, weights) {
     if (fb) {
       const result = applyFeedback(fb.tradeId, fb.outcome, weights, fb.exitPrice);
       if (result.ok) {
-        const r = Number.isFinite(result.trade.realizedR) ? result.trade.realizedR.toFixed(2) : 'n/a';
-        const mins = Number.isFinite(result.trade.durationMinutes) ? result.trade.durationMinutes.toFixed(0) : 'n/a';
-        const pips = Number.isFinite(result.trade.pipsCaptured) ? result.trade.pipsCaptured.toFixed(1) : 'n/a';
+        const metrics = result.metrics || result.trade;
+        const r = Number.isFinite(metrics.realizedR) ? metrics.realizedR.toFixed(2) : 'n/a';
+        const mins = Number.isFinite(metrics.durationMinutes) ? metrics.durationMinutes.toFixed(0) : 'n/a';
+        const pips = Number.isFinite(metrics.pipsCaptured) ? metrics.pipsCaptured.toFixed(1) : 'n/a';
+        const prefix = result.partial ? 'Logged partial' : 'Logged final';
         await sendMessage(config.telegram.token, msg.chat.id,
-          `✅ Logged ${fb.outcome} HIT for \`${fb.tradeId}\` (${result.trade.symbol})\nR: ${r} | pips/points: ${pips} | duration: ${mins} min\nWin rate: ${result.stats.winRate} (${result.stats.totalTrades} trades)`);
+          `✅ ${prefix} ${fb.outcome} HIT for \`${fb.tradeId}\` (${result.trade.symbol})\nR: ${r} | pips/points: ${pips} | duration: ${mins} min\nWin rate: ${result.stats.winRate} (${result.stats.totalTrades} closed trades)`);
         replies.push(result);
       } else {
         await sendMessage(config.telegram.token, msg.chat.id, `⚠️ ${result.error}`);

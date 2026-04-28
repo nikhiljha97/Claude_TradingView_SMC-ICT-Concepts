@@ -801,7 +801,7 @@ export function detectWeeklyTemplate(barsDaily) {
 
 /**
  * Full SMC + Pivot Boss + ICT signal engine.
- * Returns { direction, score, breakdown, entry, sl, tp1, tp2, rr, details }
+ * Returns { direction, score, breakdown, entry, sl, tp1, tp2, tp3, rr, details }
  */
 export function computeSignal({
   symbol, bars4H, bars1H, bars15M, barsDaily, barsWeekly, weights
@@ -1046,7 +1046,7 @@ export function computeSignal({
 
   // ── 11. SL / TP Calculation ───────────────────────────────────────────────
   const atr15M = calcATR(bars15M, 14);
-  let entry, sl, tp1, tp2, rr;
+  let entry, sl, tp1, tp2, tp3, rr;
 
   function actualRR(direction, entry, sl, target) {
     const risk = Math.abs(Number(entry) - Number(sl));
@@ -1065,10 +1065,10 @@ export function computeSignal({
       : currentPrice - atr15M * 1.5;
     sl = slBase - atr15M * 0.5;
     const risk = entry - sl;
-    tp1 = entry + risk * 2.5;
-    tp2 = entry + risk * 4.0;
-    if (dailyPivots.R1 > entry && dailyPivots.R1 < tp2) tp1 = dailyPivots.R1;
-    if (dailyPivots.R2 > tp1) tp2 = dailyPivots.R2;
+    tp1 = entry + risk;
+    tp2 = entry + risk * 2.0;
+    tp3 = entry + risk * 2.5;
+    if (dailyPivots.R2 > tp3) tp3 = dailyPivots.R2;
     // ICT Fib extensions (1.272/1.618) of manipulation swing → TP targets
     if (sweep15M.detected && mss15M.detected && mss15M.direction === 'bullish' &&
         sweep15M.sweptLevel < mss15M.mssLevel) {
@@ -1076,7 +1076,7 @@ export function computeSignal({
       const fib127 = mss15M.mssLevel + range * 0.272;
       const fib168 = mss15M.mssLevel + range * 0.618;
       details.fibExtTPs = { fib127, fib168 };
-      if (fib168 > tp1) tp2 = fib168;
+      if (fib168 > tp3) tp3 = fib168;
     }
   } else if (direction === 'SELL') {
     entry = currentPrice;
@@ -1086,10 +1086,10 @@ export function computeSignal({
       : currentPrice + atr15M * 1.5;
     sl = slBase + atr15M * 0.5;
     const risk = sl - entry;
-    tp1 = entry - risk * 2.5;
-    tp2 = entry - risk * 4.0;
-    if (dailyPivots.S1 < entry && dailyPivots.S1 > tp2) tp1 = dailyPivots.S1;
-    if (dailyPivots.S2 < tp1) tp2 = dailyPivots.S2;
+    tp1 = entry - risk;
+    tp2 = entry - risk * 2.0;
+    tp3 = entry - risk * 2.5;
+    if (dailyPivots.S2 < tp3) tp3 = dailyPivots.S2;
     // ICT Fib extensions for bearish
     if (sweep15M.detected && mss15M.detected && mss15M.direction === 'bearish' &&
         sweep15M.sweptLevel > mss15M.mssLevel) {
@@ -1097,16 +1097,21 @@ export function computeSignal({
       const fib127 = mss15M.mssLevel - range * 0.272;
       const fib168 = mss15M.mssLevel - range * 0.618;
       details.fibExtTPs = { fib127, fib168 };
-      if (fib168 < tp1) tp2 = fib168;
+      if (fib168 < tp3) tp3 = fib168;
     }
   }
 
   // ── 12. RR Filter + Bonus ─────────────────────────────────────────────────
-  rr = direction === 'NONE' ? 0 : actualRR(direction, entry, sl, tp1);
+  rr = direction === 'NONE' ? 0 : actualRR(direction, entry, sl, tp3);
   details.riskReward = {
     actualRR: rr,
     risk: Math.abs(Number(entry) - Number(sl)),
-    reward: direction === 'BUY' ? Number(tp1) - Number(entry) : Number(entry) - Number(tp1),
+    reward: direction === 'BUY' ? Number(tp3) - Number(entry) : Number(entry) - Number(tp3),
+    partials: {
+      tp1R: 1,
+      tp2R: 2,
+      finalR: rr,
+    },
   };
   if (rr < 2.5) direction = 'NONE';
   if (rr >= 3) {
@@ -1119,7 +1124,7 @@ export function computeSignal({
     score: Math.round(score.total * 10) / 10,
     maxScore: Object.values(weights).reduce((a, b) => a + b, 0),
     breakdown: score.breakdown,
-    entry, sl, tp1, tp2,
+    entry, sl, tp1, tp2, tp3,
     rr: rr ? Math.round(rr * 10) / 10 : null,
     atr: atr15M,
     details,

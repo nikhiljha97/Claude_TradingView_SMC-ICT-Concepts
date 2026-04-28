@@ -77,7 +77,9 @@ def trade_outcome_rows(trade_log: str | None, live_dir: Path, gpr=None, news=Non
         outcome = trade.get("outcome")
         direction = trade.get("direction")
         symbol = trade.get("symbol")
-        if outcome not in {"TP", "SL"} or direction not in {"BUY", "SELL"} or not symbol:
+        if outcome == "TP":
+            outcome = "TP3"
+        if outcome not in {"TP3", "SL"} or direction not in {"BUY", "SELL"} or not symbol:
             continue
         if symbol not in bars_by_symbol:
             bars_path = live_dir / f"{symbol}_15.csv"
@@ -101,10 +103,10 @@ def trade_outcome_rows(trade_log: str | None, live_dir: Path, gpr=None, news=Non
             "side_long": 1.0 if side == "long" else 0.0,
             "side_short": 1.0 if side == "short" else 0.0,
             "side": side,
-            "tp": trade.get("tp1") or trade.get("tp2") or "",
+            "tp": trade.get("tp3") or trade.get("tp2") or trade.get("tp1") or "",
             "sl": trade.get("sl") or "",
             "horizon": "manual",
-            "label": 1 if outcome == "TP" else 0,
+            "label": 1 if outcome == "TP3" else 0,
             "bars_to_event": duration_bars or "",
             "exit_price": trade.get("exitPrice") or "",
             "realized_r": trade.get("realizedR") or "",
