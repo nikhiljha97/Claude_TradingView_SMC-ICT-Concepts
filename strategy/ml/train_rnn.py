@@ -99,6 +99,12 @@ def classification_metrics(labels: list[int], probs: list[float]) -> dict:
     tn = sum(1 for pred, label in zip(preds, labels) if pred == 0 and label == 0)
     fp = sum(1 for pred, label in zip(preds, labels) if pred == 1 and label == 0)
     fn = sum(1 for pred, label in zip(preds, labels) if pred == 0 and label == 1)
+    sensitivity = tp / max(1, tp + fn)
+    specificity = tn / max(1, tn + fp)
+    precision = tp / max(1, tp + fp)
+    recall = sensitivity
+    f1 = (2 * precision * recall / max(1e-12, precision + recall)) if precision or recall else 0.0
+    auc = binary_auc(labels, probs)
     eps = 1e-7
     log_loss = -sum(
         label * math.log(min(1 - eps, max(eps, prob))) +
@@ -108,11 +114,16 @@ def classification_metrics(labels: list[int], probs: list[float]) -> dict:
     brier = sum((prob - label) ** 2 for label, prob in zip(labels, probs)) / total
     return {
         "accuracy": (tp + tn) / total,
-        "precision": tp / max(1, tp + fp),
-        "recall": tp / max(1, tp + fn),
-        "auc": binary_auc(labels, probs),
+        "balanced_accuracy": (sensitivity + specificity) / 2,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "auc": auc,
         "log_loss": log_loss,
         "brier": brier,
+        "positive_rate": sum(preds) / total,
+        "label_positive_rate": sum(labels) / total,
+        "utility_score": ((auc if auc is not None else 0.5) * 0.45) + (((sensitivity + specificity) / 2) * 0.35) + (f1 * 0.20),
         "tp": tp,
         "tn": tn,
         "fp": fp,
@@ -122,6 +133,8 @@ def classification_metrics(labels: list[int], probs: list[float]) -> dict:
 
 def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_size: int, out_path: str):
     torch, nn = require_torch()
+    random.seed(42)
+    torch.manual_seed(42)
     ensure_dirs()
     rows = load_rows(input_path)
     if len(rows) < seq_len + 500:
@@ -148,7 +161,10 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
 
     model = GRUClassifier()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
-    loss_fn = nn.BCEWithLogitsLoss()
+    positives = float(y_train.sum().item())
+    negatives = float(y_train.numel() - positives)
+    pos_weight = torch.tensor([negatives / max(1.0, positives)], dtype=torch.float32)
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     for epoch in range(epochs):
         model.train()

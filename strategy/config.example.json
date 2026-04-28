@@ -87,8 +87,8 @@
       "historyPath": "strategy/ml/reports/retrain_history.jsonl",
       "statePath": "strategy/ml/reports/retrain_state.json",
       "lockPath": "strategy/ml/models/retrain.lock",
-      "promotionMetric": "test_accuracy",
-      "minPromotionScore": 0.5,
+      "promotionMetric": "utility_score",
+      "minPromotionScore": 0.4,
       "minPromotionDelta": 0
     }
   },
@@ -104,6 +104,7 @@
     "ictNDOG": 0.5,
     "fourHBias": 1.0,
     "dailyBias": 1.0,
-    "weeklyTemplate": 1.0
+    "weeklyTemplate": 1.0,
+    "additionalConfluence": 0.75
   }
 }

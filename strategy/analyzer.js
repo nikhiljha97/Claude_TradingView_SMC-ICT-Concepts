@@ -56,6 +56,102 @@ export function detectTrend(bars, lookback = 5) {
   return 'ranging';
 }
 
+function clamp(value, low = 0, high = 1) {
+  return Math.max(low, Math.min(high, Number.isFinite(value) ? value : low));
+}
+
+function trendValue(trend) {
+  if (trend === 'bullish') return 1;
+  if (trend === 'bearish') return -1;
+  return 0;
+}
+
+export function derivePivotPoints(bars, lookback = 3) {
+  return findSwings(bars, lookback).map(swing => ({
+    idx: swing.idx,
+    price: swing.price,
+    type: swing.type,
+    barsAgo: bars.length - 1 - swing.idx,
+  }));
+}
+
+function fibLocationScore(bars, side) {
+  const direction = side === 'BUY' ? 'bullish' : side === 'SELL' ? 'bearish' : null;
+  if (!direction) return { score: 0, inOTE: false };
+  const ote = checkOTE(bars, direction);
+  if (ote.inOTE) return { score: 1, inOTE: true, ...ote };
+
+  const pivots = derivePivotPoints(bars, 3).slice(-8);
+  let leg = null;
+  for (let i = pivots.length - 1; i > 0; i--) {
+    if (pivots[i].type !== pivots[i - 1].type) {
+      leg = [pivots[i - 1], pivots[i]];
+      break;
+    }
+  }
+  if (!leg) return { score: 0, inOTE: false, ...ote };
+
+  const [start, end] = leg;
+  const range = Math.abs(end.price - start.price);
+  if (!range) return { score: 0, inOTE: false, ...ote };
+  const current = bars[bars.length - 1].close;
+  const retrace = side === 'BUY'
+    ? (end.price - current) / range
+    : (current - end.price) / range;
+  const distance = Math.min(Math.abs(retrace - 0.618), Math.abs(retrace - 0.705), Math.abs(retrace - 0.79));
+  return {
+    score: clamp(1 - distance / 0.2),
+    inOTE: false,
+    retrace,
+    ...ote,
+  };
+}
+
+export function deriveConfluenceFeatures({ bars15M, bars1H, bars4H, direction, currentPrice, maxBonus = 0.75 }) {
+  if (!['BUY', 'SELL'].includes(direction)) {
+    return {
+      chochScore: 0,
+      fibOteScore: 0,
+      structureAlignmentScore: 0,
+      confluenceBonus: 0,
+    };
+  }
+
+  const wanted = direction === 'BUY' ? 1 : -1;
+  const mss = detectMSS(bars15M, 20);
+  const bos = detectBOS(bars15M, 5);
+  const pivots = derivePivotPoints(bars15M, 3);
+  const lastHigh = [...pivots].reverse().find(p => p.type === 'high');
+  const lastLow = [...pivots].reverse().find(p => p.type === 'low');
+  const mssAligned = mss.detected && ((direction === 'BUY' && mss.direction === 'bullish') || (direction === 'SELL' && mss.direction === 'bearish'));
+  const bosAligned = bos.detected && ((direction === 'BUY' && bos.direction === 'bullish') || (direction === 'SELL' && bos.direction === 'bearish'));
+  const levelBreak = direction === 'BUY'
+    ? lastHigh && currentPrice > lastHigh.price
+    : lastLow && currentPrice < lastLow.price;
+  const chochScore = mssAligned ? 1 : bosAligned && levelBreak ? 0.7 : levelBreak ? 0.45 : 0;
+
+  const fib = fibLocationScore(bars15M, direction);
+  const fibOteScore = fib.score;
+
+  const trends = [detectTrend(bars15M, 3), detectTrend(bars1H, 4), detectTrend(bars4H, 4)].map(trendValue);
+  const aligned = trends.filter(value => value === wanted).length;
+  const opposed = trends.filter(value => value === -wanted).length;
+  const structureAlignmentScore = clamp((aligned - opposed * 0.5) / trends.length);
+
+  const raw = chochScore * 0.4 + fibOteScore * 0.25 + structureAlignmentScore * 0.35;
+  return {
+    chochScore: Math.round(chochScore * 1000) / 1000,
+    fibOteScore: Math.round(fibOteScore * 1000) / 1000,
+    structureAlignmentScore: Math.round(structureAlignmentScore * 1000) / 1000,
+    confluenceBonus: Math.round(raw * maxBonus * 10) / 10,
+    mssAligned,
+    bosAligned,
+    levelBreak: !!levelBreak,
+    fib,
+    trends: { m15: trends[0], h1: trends[1], h4: trends[2] },
+  };
+}
+
 // ─── BOS / CHoCH / MSS ──────────────────────────────────────────────────────
 
 /**
@@ -932,6 +1028,20 @@ export function computeSignal({
       score.total += wtScore;
       score.breakdown.weeklyTemplate = wtScore;
     }
+  }
+
+  // ── 10b. Research confluence layer: CHOCH/MSS + Fib/OTE + multi-scale structure
+  details.additionalConfluence = deriveConfluenceFeatures({
+    bars15M,
+    bars1H,
+    bars4H,
+    direction,
+    currentPrice,
+    maxBonus: weights.additionalConfluence || 0.75,
+  });
+  if (details.additionalConfluence.confluenceBonus > 0) {
+    score.total += details.additionalConfluence.confluenceBonus;
+    score.breakdown.additionalConfluence = details.additionalConfluence.confluenceBonus;
   }
 
   // ── 11. SL / TP Calculation ───────────────────────────────────────────────

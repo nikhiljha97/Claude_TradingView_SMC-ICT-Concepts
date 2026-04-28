@@ -50,8 +50,8 @@ export function maybeStartRetraining(config) {
     '--lock', lockPath,
   ];
   args.push('--history', resolveRepoPath(retrain.historyPath || 'strategy/ml/reports/retrain_history.jsonl'));
-  args.push('--promotion-metric', retrain.promotionMetric || 'test_accuracy');
-  args.push('--min-promotion-score', String(retrain.minPromotionScore ?? 0.5));
+  args.push('--promotion-metric', retrain.promotionMetric || 'utility_score');
+  args.push('--min-promotion-score', String(retrain.minPromotionScore ?? 0.4));
   args.push('--min-promotion-delta', String(retrain.minPromotionDelta ?? 0));
   if (retrain.gprPath) args.push('--gpr', resolveRepoPath(retrain.gprPath));
   if (retrain.newsPath) args.push('--news', resolveRepoPath(retrain.newsPath));

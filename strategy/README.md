@@ -48,6 +48,7 @@ Distilled from your reading list:
 - **ICT NDOG** (New Day Opening Gap magnetism) → `0.5`
 - **Power of 3 distribution phase** → `0.25` bonus
 - **RR ≥ 1:3 bonus** → `1.0`
+- **Additional research confluence** (CHOCH/MSS quality + Fib/OTE location + multi-scale structure alignment) → capped by `weights.additionalConfluence`
 
 A signal fires when:
 - score ≥ **6.5/10**
@@ -98,6 +99,14 @@ OHLCV history → SMC/ICT/Pivot setup → ML probability → Telegram alert
 
 If the model is missing or below the configured probability threshold, the alert is blocked. The model receives price/volume features plus explicit SMC/ICT, auction-market, side, official AI-GPR geopolitical-risk features, and near-real-time headline-pressure features from GDELT/RSS feeds.
 
+The ML feature layer also includes research-grade confluence columns:
+
+- CHOCH/MSS quality: direction, break strength, recency, pivot regularity, swing-sequence quality.
+- Fibonacci/OTE location: retracement zone, distance to 0.618/0.705/0.79, leg size versus ATR, RR proxy, OTE quality.
+- Multi-scale structure: short/intermediate/major trend alignment, pivot prominence, distance to major high/low, structure confidence.
+
+The JavaScript analyzer exposes the same idea as `details.additionalConfluence` and a capped `additionalConfluence` score contribution. It is deliberately soft: it can add conviction to an already directional setup, but it does not bypass RR, continuity, or the RNN gate.
+
 Every scanner cycle can also append live OHLCV bars and signal snapshots:
 
 ```
@@ -137,8 +146,8 @@ To enable the model in `config.json`:
     "hidden": 32,
     "epochs": 3,
     "historyPath": "strategy/ml/reports/retrain_history.jsonl",
-    "promotionMetric": "test_accuracy",
-    "minPromotionScore": 0.5,
+    "promotionMetric": "utility_score",
+    "minPromotionScore": 0.4,
     "minPromotionDelta": 0
   }
 }

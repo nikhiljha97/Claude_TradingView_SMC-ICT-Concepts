@@ -79,6 +79,7 @@ Current live scanner behavior:
 - Enforces minimum `1:2.5` actual risk/reward before any alert is sent
 - Sends Telegram alerts immediately when a pair passes, without waiting for the full watchlist cycle
 - Uses a PyTorch GRU/RNN as the required ML gate on top of the SMC/ICT/auction-market rule engine
+- Adds CHOCH/MSS quality, Fib/OTE location, and multi-scale structure alignment as neural feature families
 - Stores live OHLCV captures and scan snapshots locally under `strategy/ml/data/live/`
 - Uses official AI-GPR data plus GDELT/RSS geopolitical headline features in the neural feature set
 - Processes Telegram feedback such as `YES <tradeId>`, `NO <tradeId>`, `TP HIT <tradeId>`, and `SL HIT <tradeId>`

@@ -117,6 +117,22 @@ def metric_value(summary: dict, metric: str) -> float | None:
         value = summary.get("test_accuracy")
     else:
         value = (summary.get("metrics") or {}).get(metric)
+        if value is None and metric == "utility_score":
+            metrics = summary.get("metrics") or {}
+            try:
+                auc = float(metrics.get("auc", 0.5) or 0.5)
+                tp = float(metrics.get("tp", 0) or 0)
+                tn = float(metrics.get("tn", 0) or 0)
+                fp = float(metrics.get("fp", 0) or 0)
+                fn = float(metrics.get("fn", 0) or 0)
+                precision = float(metrics.get("precision", 0) or 0)
+                recall = float(metrics.get("recall", 0) or 0)
+                specificity = tn / max(1.0, tn + fp)
+                balanced = (recall + specificity) / 2
+                f1 = (2 * precision * recall / max(1e-12, precision + recall)) if precision or recall else 0.0
+                value = (auc * 0.45) + (balanced * 0.35) + (f1 * 0.20)
+            except (TypeError, ValueError):
+                value = None
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -154,8 +170,8 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--lock", default=None)
     parser.add_argument("--history", default=None)
-    parser.add_argument("--promotion-metric", default="test_accuracy")
-    parser.add_argument("--min-promotion-score", type=float, default=0.5)
+    parser.add_argument("--promotion-metric", default="utility_score")
+    parser.add_argument("--min-promotion-score", type=float, default=0.4)
     parser.add_argument("--min-promotion-delta", type=float, default=0.0)
     args = parser.parse_args()
 

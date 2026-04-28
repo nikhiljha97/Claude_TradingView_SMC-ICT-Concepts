@@ -87,12 +87,32 @@ python -m strategy.ml.data_sources.news
 Hourly live retraining refreshes both datasets when `refreshGpr` and
 `refreshNews` are enabled in `strategy/config.json`.
 
+## Confluence Feature Families
+
+The RNN feature schema includes the rule vocabulary plus three additional
+research layers:
+
+- CHOCH/MSS quality: `choch_*`, `mss_*`, pivot regularity, and swing-sequence
+  quality.
+- Fibonacci/OTE location quality: retracement zone flags, distance to
+  0.618/0.705/0.79, leg size versus ATR, RR proxy, and `fib_ote_quality`.
+- Multi-scale structure: short/intermediate/major trend values, alignment
+  score, pivot prominence, distance to major high/low, and structure
+  confidence.
+
+Existing checkpoints remain loadable because inference reads the feature list
+from the active checkpoint. These new columns become part of the neural gate
+after a retrain creates and promotes a checkpoint trained on the expanded
+schema.
+
 Each retrain writes a promotion event to
 `strategy/ml/reports/retrain_history.jsonl`. The hourly job trains a
 candidate model first, compares it with the active model using
-`promotionMetric` (default `test_accuracy`), and promotes the candidate only
+`promotionMetric` (default `utility_score`), and promotes the candidate only
 when it reaches `minPromotionScore` and beats the current model by at least
-`minPromotionDelta`.
+`minPromotionDelta`. `utility_score` combines AUC, balanced accuracy, and F1
+so a majority-class model cannot win promotion only by predicting "no TP" for
+everything.
 
 ## Scanner Integration
 

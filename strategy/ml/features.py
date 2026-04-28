@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from strategy.ml.common import PROCESSED_DIR, ensure_dirs, parse_time, pct_change, read_bars, safe_div, write_rows
+from strategy.ml.common import PROCESSED_DIR, clamp, ensure_dirs, parse_time, pct_change, read_bars, safe_div, write_rows
 
 
 FEATURE_FIELDS = (
@@ -32,7 +32,16 @@ FEATURE_FIELDS = (
     "ict_fvg_bear", "ict_premium", "ict_discount", "ict_killzone_london",
     "ict_killzone_ny", "ict_killzone_asia", "auction_failed_up",
     "auction_failed_down", "auction_initiative_buy", "auction_initiative_sell",
-    "auction_balance", "gpr_ai", "gpr_aer", "gpr_oil", "gpr_nonoil",
+    "auction_balance", "choch_bull", "choch_bear", "choch_strength",
+    "choch_age_norm", "mss_bull", "mss_bear", "pivot_regularity_score",
+    "swing_sequence_quality", "fib_retrace_pct", "fib_in_50_618_zone",
+    "fib_in_618_705_zone", "fib_in_705_79_zone", "fib_distance_to_618",
+    "fib_distance_to_705", "fib_distance_to_79", "fib_rr_proxy",
+    "fib_leg_size_atr", "fib_ote_quality", "ms_level0_trend",
+    "ms_level1_trend", "ms_level2_trend", "ms_alignment_score",
+    "ms_last_high_prominence", "ms_last_low_prominence",
+    "ms_distance_to_major_high", "ms_distance_to_major_low",
+    "ms_structure_confidence", "gpr_ai", "gpr_aer", "gpr_oil", "gpr_nonoil",
     "gpr_ai_change_7", "gpr_ai_z_90", "news_geo_score", "news_geo_count",
     "news_conflict_score", "news_energy_score", "news_us_score",
     "news_europe_score", "news_russia_score", "news_china_score",
@@ -164,6 +173,209 @@ def swing_flags(window: list[dict]) -> tuple[float, float, float]:
     return trend, highs[-1][1], lows[-1][1]
 
 
+def pivot_points(window: list[dict], lookback: int = 3) -> list[dict]:
+    pivots = []
+    if len(window) < lookback * 2 + 1:
+        return pivots
+    for i in range(lookback, len(window) - lookback):
+        left = window[i - lookback:i]
+        right = window[i + 1:i + lookback + 1]
+        high = window[i]["high"]
+        low = window[i]["low"]
+        if all(high > b["high"] for b in left + right):
+            pivots.append({"idx": i, "price": high, "type": "high", "bar": window[i]})
+        if all(low < b["low"] for b in left + right):
+            pivots.append({"idx": i, "price": low, "type": "low", "bar": window[i]})
+    return pivots
+
+
+def pivot_trend(pivots: list[dict]) -> float:
+    highs = [p for p in pivots if p["type"] == "high"]
+    lows = [p for p in pivots if p["type"] == "low"]
+    if len(highs) < 2 or len(lows) < 2:
+        return 0.0
+    hh = highs[-1]["price"] > highs[-2]["price"]
+    hl = lows[-1]["price"] > lows[-2]["price"]
+    lh = highs[-1]["price"] < highs[-2]["price"]
+    ll = lows[-1]["price"] < lows[-2]["price"]
+    if hh and hl:
+        return 1.0
+    if lh and ll:
+        return -1.0
+    return 0.0
+
+
+def pivot_regularity(pivots: list[dict]) -> float:
+    if len(pivots) < 4:
+        return 0.0
+    gaps = [pivots[i]["idx"] - pivots[i - 1]["idx"] for i in range(1, len(pivots))]
+    avg_gap = mean(gaps)
+    if avg_gap <= 0:
+        return 0.0
+    return clamp(1.0 - safe_div(stdev(gaps), avg_gap), 0.0, 1.0)
+
+
+def swing_sequence_quality(pivots: list[dict]) -> float:
+    if len(pivots) < 4:
+        return 0.0
+    recent = pivots[-6:]
+    alternations = sum(1 for i in range(1, len(recent)) if recent[i]["type"] != recent[i - 1]["type"])
+    return safe_div(alternations, max(1, len(recent) - 1))
+
+
+def choch_features(window: list[dict], atr_14: float) -> dict:
+    pivots = pivot_points(window, 3)
+    trend = pivot_trend(pivots[:-1])
+    highs = [p for p in pivots if p["type"] == "high"]
+    lows = [p for p in pivots if p["type"] == "low"]
+    current = window[-1]["close"]
+    result = {
+        "choch_bull": 0.0,
+        "choch_bear": 0.0,
+        "choch_strength": 0.0,
+        "choch_age_norm": 0.0,
+        "mss_bull": 0.0,
+        "mss_bear": 0.0,
+        "pivot_regularity_score": pivot_regularity(pivots),
+        "swing_sequence_quality": swing_sequence_quality(pivots),
+    }
+    if not highs or not lows:
+        return result
+
+    last_high = highs[-1]
+    last_low = lows[-1]
+    if trend <= 0 and current > last_high["price"]:
+        distance = current - last_high["price"]
+        result["choch_bull"] = 1.0
+        result["choch_strength"] = clamp(safe_div(distance, atr_14), 0.0, 3.0) / 3.0
+        result["choch_age_norm"] = clamp(safe_div(len(window) - 1 - last_high["idx"], 50.0), 0.0, 1.0)
+    elif trend >= 0 and current < last_low["price"]:
+        distance = last_low["price"] - current
+        result["choch_bear"] = 1.0
+        result["choch_strength"] = clamp(safe_div(distance, atr_14), 0.0, 3.0) / 3.0
+        result["choch_age_norm"] = clamp(safe_div(len(window) - 1 - last_low["idx"], 50.0), 0.0, 1.0)
+
+    recent = window[-20:]
+    prior_low = min(b["low"] for b in recent[:-1])
+    prior_high = max(b["high"] for b in recent[:-1])
+    swept_low = window[-1]["low"] < prior_low and current > prior_low
+    swept_high = window[-1]["high"] > prior_high and current < prior_high
+    result["mss_bull"] = 1.0 if swept_low and result["choch_bull"] else 0.0
+    result["mss_bear"] = 1.0 if swept_high and result["choch_bear"] else 0.0
+    return result
+
+
+def fib_features(window: list[dict], atr_14: float) -> dict:
+    pivots = pivot_points(window, 3)
+    result = {
+        "fib_retrace_pct": 0.0,
+        "fib_in_50_618_zone": 0.0,
+        "fib_in_618_705_zone": 0.0,
+        "fib_in_705_79_zone": 0.0,
+        "fib_distance_to_618": 1.0,
+        "fib_distance_to_705": 1.0,
+        "fib_distance_to_79": 1.0,
+        "fib_rr_proxy": 0.0,
+        "fib_leg_size_atr": 0.0,
+        "fib_ote_quality": 0.0,
+    }
+    if len(pivots) < 2:
+        return result
+
+    recent = pivots[-8:]
+    leg = None
+    for j in range(len(recent) - 1, 0, -1):
+        a = recent[j - 1]
+        b = recent[j]
+        if a["type"] != b["type"] and abs(b["price"] - a["price"]) > 0:
+            leg = (a, b)
+            break
+    if not leg:
+        return result
+
+    start, end = leg
+    leg_size = abs(end["price"] - start["price"])
+    if leg_size <= 0:
+        return result
+    current = window[-1]["close"]
+    if start["type"] == "low" and end["type"] == "high":
+        retrace = safe_div(end["price"] - current, leg_size)
+        risk_anchor = end["price"] - leg_size * 0.79
+        reward_anchor = end["price"] + leg_size * 0.272
+        rr_proxy = safe_div(reward_anchor - current, current - risk_anchor)
+    else:
+        retrace = safe_div(current - end["price"], leg_size)
+        risk_anchor = end["price"] + leg_size * 0.79
+        reward_anchor = end["price"] - leg_size * 0.272
+        rr_proxy = safe_div(current - reward_anchor, risk_anchor - current)
+
+    retrace = clamp(retrace, 0.0, 1.5)
+    dist_618 = abs(retrace - 0.618)
+    dist_705 = abs(retrace - 0.705)
+    dist_79 = abs(retrace - 0.79)
+    result.update({
+        "fib_retrace_pct": retrace,
+        "fib_in_50_618_zone": 1.0 if 0.50 <= retrace < 0.618 else 0.0,
+        "fib_in_618_705_zone": 1.0 if 0.618 <= retrace < 0.705 else 0.0,
+        "fib_in_705_79_zone": 1.0 if 0.705 <= retrace <= 0.79 else 0.0,
+        "fib_distance_to_618": clamp(dist_618, 0.0, 1.0),
+        "fib_distance_to_705": clamp(dist_705, 0.0, 1.0),
+        "fib_distance_to_79": clamp(dist_79, 0.0, 1.0),
+        "fib_rr_proxy": clamp(rr_proxy / 4.0, 0.0, 2.0),
+        "fib_leg_size_atr": clamp(safe_div(leg_size, atr_14), 0.0, 10.0) / 10.0,
+        "fib_ote_quality": clamp(1.0 - min(dist_618, dist_705, dist_79) / 0.20, 0.0, 1.0),
+    })
+    return result
+
+
+def multiscale_structure_features(bars: list[dict], i: int, atr_14: float) -> dict:
+    result = {
+        "ms_level0_trend": 0.0,
+        "ms_level1_trend": 0.0,
+        "ms_level2_trend": 0.0,
+        "ms_alignment_score": 0.0,
+        "ms_last_high_prominence": 0.0,
+        "ms_last_low_prominence": 0.0,
+        "ms_distance_to_major_high": 1.0,
+        "ms_distance_to_major_low": 1.0,
+        "ms_structure_confidence": 0.0,
+    }
+    windows = [bars[max(0, i - 20):i + 1], bars[max(0, i - 50):i + 1], bars[max(0, i - 100):i + 1]]
+    trends = []
+    for window in windows:
+        pivots = pivot_points(window, 3)
+        trends.append(pivot_trend(pivots))
+    result["ms_level0_trend"], result["ms_level1_trend"], result["ms_level2_trend"] = trends
+    nonzero = [t for t in trends if t != 0]
+    if nonzero:
+        result["ms_alignment_score"] = abs(sum(nonzero)) / len(nonzero)
+
+    major = windows[-1]
+    pivots = pivot_points(major, 3)
+    highs = [p for p in pivots if p["type"] == "high"]
+    lows = [p for p in pivots if p["type"] == "low"]
+    current = bars[i]["close"]
+    major_range = max(b["high"] for b in major) - min(b["low"] for b in major)
+    if highs:
+        last_high = highs[-1]
+        local_lows = [p["price"] for p in lows if abs(p["idx"] - last_high["idx"]) <= 20]
+        base = min(local_lows) if local_lows else min(b["low"] for b in major)
+        result["ms_last_high_prominence"] = clamp(safe_div(last_high["price"] - base, atr_14), 0.0, 5.0) / 5.0
+        result["ms_distance_to_major_high"] = clamp(abs(current - last_high["price"]) / max(major_range, 1e-12), 0.0, 1.0)
+    if lows:
+        last_low = lows[-1]
+        local_highs = [p["price"] for p in highs if abs(p["idx"] - last_low["idx"]) <= 20]
+        base = max(local_highs) if local_highs else max(b["high"] for b in major)
+        result["ms_last_low_prominence"] = clamp(safe_div(base - last_low["price"], atr_14), 0.0, 5.0) / 5.0
+        result["ms_distance_to_major_low"] = clamp(abs(current - last_low["price"]) / max(major_range, 1e-12), 0.0, 1.0)
+    result["ms_structure_confidence"] = clamp(
+        (result["ms_alignment_score"] + max(result["ms_last_high_prominence"], result["ms_last_low_prominence"])) / 2,
+        0.0,
+        1.0,
+    )
+    return result
+
+
 def equal_level_counts(window: list[dict], tolerance: float = 0.001) -> tuple[float, float]:
     equal_highs = 0
     equal_lows = 0
@@ -288,7 +500,11 @@ def build_features(bars: list[dict], gpr: dict[str, dict] | None = None, news: d
             "gpr_ai_z_90": 0.0,
         })
         news_features = news.get(date_key, default_news_features())
+        structure_window = bars[max(0, i - 100):i + 1]
         structure = smc_ict_auction_features(bars, i, atr_14, vol_z)
+        choch = choch_features(structure_window, atr_14)
+        fib = fib_features(structure_window, atr_14)
+        multiscale = multiscale_structure_features(bars, i, atr_14)
 
         rows.append({
             "timestamp": bar["timestamp"],
@@ -306,6 +522,9 @@ def build_features(bars: list[dict], gpr: dict[str, dict] | None = None, news: d
             "compression_20": safe_div(mean(range_20[-5:]), mean(range_20)),
             "range_pos_50": safe_div(close - low_50, high_50 - low_50, 0.5),
             **structure,
+            **choch,
+            **fib,
+            **multiscale,
             **gpr_features,
             **news_features,
         })
