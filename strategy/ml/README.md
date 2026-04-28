@@ -114,6 +114,12 @@ when it reaches `minPromotionScore` and beats the current model by at least
 so a majority-class model cannot win promotion only by predicting "no TP" for
 everything.
 
+Summarize the active model and recent retrains:
+
+```bash
+npm run model:report
+```
+
 ## Scanner Integration
 
 The scanner integration is optional and controlled by `config.json`:

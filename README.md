@@ -107,6 +107,7 @@ cd /Users/nikhiljha/tradingview-mcp
 ./scripts/trading_local.sh status      # show LaunchAgent, keep-awake, and TradingView status
 ./scripts/trading_local.sh logs        # follow scanner logs
 ./scripts/trading_local.sh keep-awake-on
+npm run model:report                   # summarize active RNN metrics and retrain history
 ```
 
 The detailed scanner documentation lives in [`strategy/README.md`](strategy/README.md), and the ML/RNN documentation lives in [`strategy/ml/README.md`](strategy/ml/README.md).

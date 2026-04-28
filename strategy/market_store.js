@@ -81,6 +81,7 @@ export function recordScanSnapshot(config, symbol, signal) {
     tp1: signal.tp1,
     tp2: signal.tp2,
     breakdown: signal.breakdown,
+    additionalConfluence: signal.details?.additionalConfluence,
     ml: signal.details?.ml,
     mlCandidates: signal.details?.mlCandidates,
   };

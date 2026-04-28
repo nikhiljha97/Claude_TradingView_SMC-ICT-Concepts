@@ -100,6 +100,14 @@ export function formatAlert(signal) {
   if (d.po3?.phase === 'manipulation') reasoning.push(`✓ PO3 manipulation phase (London sweep)`);
   if (d.dailyBias?.bias && d.dailyBias.bias !== 'neutral') reasoning.push(`✓ Daily bias: ${d.dailyBias.bias} (prev close ${fmt(d.dailyBias.prevClose)} → ${fmt(d.dailyBias.currClose)})`);
   if (d.weeklyTemplate?.template !== 'none' && d.weeklyTemplate?.template) reasoning.push(`✓ Weekly template: ${d.weeklyTemplate.template.replace(/_/g, ' ')} (${d.weeklyTemplate.bias})`);
+  if (d.additionalConfluence) {
+    const c = d.additionalConfluence;
+    const bonus = Number(c.confluenceBonus || 0).toFixed(1);
+    const choch = Number(c.chochScore || 0).toFixed(2);
+    const fib = Number(c.fibOteScore || 0).toFixed(2);
+    const structure = Number(c.structureAlignmentScore || 0).toFixed(2);
+    reasoning.push(`✓ Research confluence: +${bonus} (CHOCH ${choch}, Fib/OTE ${fib}, structure ${structure})`);
+  }
   if (d.ml?.enabled && d.ml?.success) reasoning.push(`✓ ML probability: ${(d.ml.probability * 100).toFixed(1)}% (min ${(d.ml.minProbability * 100).toFixed(0)}%)`);
   if (d.ml?.enabled && !d.ml?.success && d.ml?.reason) reasoning.push(`ML unavailable: ${d.ml.reason}`);
   if (d.continuity?.reason) reasoning.push(`Continuity: ${d.continuity.reason.replace(/_/g, ' ')}`);

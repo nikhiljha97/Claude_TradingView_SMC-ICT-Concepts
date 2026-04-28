@@ -129,6 +129,12 @@ The active RNN is the tracked pair `strategy/ml/models/rnn.pt` and
 `strategy/ml/models/rnn.json`. `rnn.pt` is the PyTorch checkpoint used for
 inference; `rnn.json` is the human-readable summary for the same model.
 
+To inspect the active neural gate and recent promotion decisions:
+
+```bash
+npm run model:report
+```
+
 To enable the model in `config.json`:
 
 ```json
