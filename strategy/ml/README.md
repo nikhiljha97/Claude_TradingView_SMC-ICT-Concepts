@@ -152,7 +152,7 @@ The scanner integration is optional and controlled by `config.json`:
   "enabled": false,
   "python": "python3",
   "modelPath": "strategy/ml/models/baseline.json",
-  "minProbability": 0.42,
+  "minProbability": 0.50,
   "failOpen": true
 }
 ```

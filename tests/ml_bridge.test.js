@@ -19,7 +19,7 @@ describe('ml bridge', () => {
     const config = mlConfig({ ml: { enabled: true, modelPath: 'strategy/ml/models/rnn.pt' } });
     assert.equal(config.enabled, true);
     assert.equal(config.python, 'python3');
-    assert.equal(config.minProbability, 0.42);
+    assert.equal(config.minProbability, 0.50);
     assert.equal(config.failOpen, false);
     assert.ok(config.modelPath.endsWith('strategy/ml/models/rnn.pt'));
   });

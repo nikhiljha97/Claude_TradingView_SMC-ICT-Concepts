@@ -144,7 +144,7 @@ To enable the model in `config.json`:
   "enabled": true,
   "python": ".venv/bin/python",
   "modelPath": "strategy/ml/models/rnn.pt",
-  "minProbability": 0.42,
+  "minProbability": 0.50,
   "failOpen": false,
   "timeoutMs": 8000,
   "retrain": {

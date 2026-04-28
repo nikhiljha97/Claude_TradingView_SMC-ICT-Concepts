@@ -110,6 +110,11 @@ export function formatAlert(signal) {
     const fib = Number(c.fibOteScore || 0).toFixed(2);
     const structure = Number(c.structureAlignmentScore || 0).toFixed(2);
     reasoning.push(`✓ Research confluence: +${bonus} (CHOCH ${choch}, Fib/OTE ${fib}, structure ${structure})`);
+    if (c.fib?.oteLow != null && c.fib?.oteHigh != null) {
+      const status = c.fib.inOTE ? 'inside OTE' : 'outside OTE';
+      const retrace = c.fib.retrace != null ? `, retrace ${(Number(c.fib.retrace) * 100).toFixed(1)}%` : '';
+      reasoning.push(`Fib/OTE: ${status} ${fmt(c.fib.oteLow)}-${fmt(c.fib.oteHigh)}${retrace}`);
+    }
   }
   if (d.ml?.enabled && d.ml?.success) reasoning.push(`✓ ML probability: ${(d.ml.probability * 100).toFixed(1)}% (min ${(d.ml.minProbability * 100).toFixed(0)}%)`);
   if (d.ml?.enabled && !d.ml?.success && d.ml?.reason) reasoning.push(`ML unavailable: ${d.ml.reason}`);
