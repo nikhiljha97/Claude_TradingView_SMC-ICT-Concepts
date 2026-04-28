@@ -120,13 +120,13 @@ if bullCisd
     lastBullCisdBar := bar_index
     if showCisdLabels
         line.new(bar_index - 1, prevBodyHigh, bar_index, prevBodyHigh, color=color.new(bullColor, 0), style=line.style_dotted, width=2)
-        f_label(bar_index, low, "CISD ↑", label.style_label_up, color.new(structureColor, 0), color.white)
+        f_label(bar_index, low, "CISD UP", label.style_label_up, color.new(structureColor, 0), color.white)
 
 if bearCisd
     lastBearCisdBar := bar_index
     if showCisdLabels
         line.new(bar_index - 1, prevBodyLow, bar_index, prevBodyLow, color=color.new(bearColor, 0), style=line.style_dotted, width=2)
-        f_label(bar_index, high, "CISD ↓", label.style_label_down, color.new(structureColor, 0), color.white)
+        f_label(bar_index, high, "CISD DN", label.style_label_down, color.new(structureColor, 0), color.white)
 
 breakHigh = not na(lastHigh) and close > lastHigh and brokenHighBar != lastHighBar
 breakLow = not na(lastLow) and close < lastLow and brokenLowBar != lastLowBar
@@ -135,7 +135,7 @@ recentBearSweep = not na(lastBearSweepBar) and bar_index - lastBearSweepBar <= s
 
 if breakHigh
     brokenHighBar := lastHighBar
-    eventText = recentBullSweep ? "MSS ↑" : trendState < 0 ? "CHOCH ↑" : "BOS ↑"
+    eventText = recentBullSweep ? "MSS UP" : trendState < 0 ? "CHOCH UP" : "BOS UP"
     trendState := 1
     if showBreakLabels
         line.new(lastHighBar, lastHigh, bar_index, lastHigh, color=color.new(bullColor, 0), width=2)
@@ -143,7 +143,7 @@ if breakHigh
 
 if breakLow
     brokenLowBar := lastLowBar
-    eventText = recentBearSweep ? "MSS ↓" : trendState > 0 ? "CHOCH ↓" : "BOS ↓"
+    eventText = recentBearSweep ? "MSS DN" : trendState > 0 ? "CHOCH DN" : "BOS DN"
     trendState := -1
     if showBreakLabels
         line.new(lastLowBar, lastLow, bar_index, lastLow, color=color.new(bearColor, 0), width=2)
