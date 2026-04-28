@@ -120,7 +120,17 @@
     "pivotConfluencePercent": 0.3,
     "htfBarsToFetch": 100,
     "entryBarsToFetch": 180,
-    "cdpWaitMs": 2000
+    "cdpWaitMs": 2000,
+    "noTradeWindows": [
+      {
+        "name": "weekday_3pm_7pm_ny",
+        "enabled": true,
+        "timezone": "America/New_York",
+        "days": [1, 2, 3, 4, 5],
+        "start": "15:00",
+        "end": "19:00"
+      }
+    ]
   },
   "alertContinuity": {
     "sameDirectionMemoryHours": 4,

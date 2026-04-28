@@ -116,6 +116,58 @@ function isWeekendSession(now = new Date()) {
   return false;
 }
 
+function minutesFromClock(value) {
+  const [hh, mm = '0'] = String(value || '').split(':');
+  const hour = Number(hh);
+  const minute = Number(mm);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function isWithinClockWindow(currentMinutes, start, end) {
+  const startMinutes = minutesFromClock(start);
+  const endMinutes = minutesFromClock(end);
+  if (startMinutes == null || endMinutes == null) return false;
+  if (startMinutes === endMinutes) return true;
+  if (startMinutes < endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+}
+
+function getNoTradeStatus(config, now = new Date()) {
+  const windows = config.strategy?.noTradeWindows || [
+    {
+      name: 'weekday_3pm_7pm_ny',
+      timezone: 'America/New_York',
+      days: [1, 2, 3, 4, 5],
+      start: '15:00',
+      end: '19:00',
+    },
+  ];
+
+  for (const window of windows) {
+    if (window.enabled === false) continue;
+    const timezone = window.timezone || 'America/New_York';
+    const local = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    const day = local.getDay();
+    const allowedDays = Array.isArray(window.days) ? window.days : [1, 2, 3, 4, 5];
+    if (!allowedDays.includes(day)) continue;
+    const currentMinutes = local.getHours() * 60 + local.getMinutes();
+    if (!isWithinClockWindow(currentMinutes, window.start, window.end)) continue;
+    return {
+      active: true,
+      name: window.name || 'no_trade_window',
+      timezone,
+      start: window.start,
+      end: window.end,
+    };
+  }
+
+  return { active: false };
+}
+
 async function processFeedback(config, weights) {
   const updates = await getUpdates(config.telegram.token, (config.telegram.last_update_id || 0) + 1);
   if (!updates.length) return [];
@@ -214,6 +266,7 @@ async function scoreDirectionalProbe(config, payload, direction) {
 
 async function scanSymbol(pair, config, weights) {
   console.log(`[scanner] Scanning ${pair.symbol}...`);
+  const noTrade = getNoTradeStatus(config);
   const requestedSymbol = configuredSymbol(pair);
   await setSymbol(requestedSymbol);
   const resolvedSymbol = await getChartSymbol().catch(() => null);
@@ -297,12 +350,17 @@ async function scanSymbol(pair, config, weights) {
     ? shouldAlert(signal, loadTrades(), config)
     : { allow: false, reason: 'no_signal' };
   signal.details.continuity = continuity;
+  signal.details.noTradeWindow = noTrade;
   if (signal.direction !== 'NONE' && !continuity.allow) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${continuity.reason}`);
+  }
+  if (signal.direction !== 'NONE' && noTrade.active) {
+    console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: no_trade_window ${noTrade.start}-${noTrade.end} ${noTrade.timezone}`);
   }
 
   if (signal.score >= config.strategy.alertScoreThreshold &&
       signal.rr >= config.strategy.minRR &&
+      !noTrade.active &&
       continuity.allow) {
     signal.tradeId = genTradeId();
     logAlert(signal);
@@ -326,6 +384,9 @@ async function scanSymbol(pair, config, weights) {
   }
   if (!continuity.allow) {
     reasons.push(`continuity ${continuity.reason || 'blocked'}`);
+  }
+  if (noTrade.active) {
+    reasons.push(`no-trade window ${noTrade.start}-${noTrade.end} ${noTrade.timezone}`);
   }
   console.log(`[scanner] No alert for ${pair.symbol} ${signal.direction}: ${reasons.join(', ')}`);
   return null;
@@ -358,6 +419,10 @@ async function main() {
   const weekend = isWeekendSession();
   const pairs = weekend ? config.weekendPairs : config.weekdayPairs;
   console.log(`[scanner] Session: ${weekend ? 'WEEKEND (crypto)' : 'WEEKDAY (forex/indices/crypto)'} — ${pairs.length} pairs`);
+  const noTrade = getNoTradeStatus(config);
+  if (noTrade.active) {
+    console.log(`[scanner] No-trade window active: ${noTrade.start}-${noTrade.end} ${noTrade.timezone}. Scans/data capture continue; new trade alerts are suppressed.`);
+  }
 
   const alerts = [];
   for (const [index, pair] of pairs.entries()) {
