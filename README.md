@@ -68,6 +68,48 @@ Gives your AI assistant eyes and hands on your own chart:
 - **CLI access** — every MCP tool is also a `tv` CLI command, pipe-friendly with JSON output
 - **Launch TradingView** — auto-detect and launch with debug mode from any platform
 
+## Local Trading Scanner Extension
+
+This fork also includes a local 15-minute scanner in `strategy/` that turns the TradingView bridge into a Telegram signal workflow. It does not place trades; it reads your local TradingView Desktop chart, evaluates configured watchlists, and sends alerts only when the rule engine, risk filter, continuity filter, and neural gate agree.
+
+Current live scanner behavior:
+
+- Runs locally through macOS `launchd` at `:00`, `:15`, `:30`, and `:45`
+- Uses weekday and weekend watchlists from `strategy/config.json`
+- Enforces minimum `1:2.5` actual risk/reward before any alert is sent
+- Sends Telegram alerts immediately when a pair passes, without waiting for the full watchlist cycle
+- Uses a PyTorch GRU/RNN as the required ML gate on top of the SMC/ICT/auction-market rule engine
+- Stores live OHLCV captures and scan snapshots locally under `strategy/ml/data/live/`
+- Uses official AI-GPR data plus GDELT/RSS geopolitical headline features in the neural feature set
+- Processes Telegram feedback such as `YES <tradeId>`, `NO <tradeId>`, `TP HIT <tradeId>`, and `SL HIT <tradeId>`
+- Retrains hourly from live labels plus manual TP/SL outcomes, then promotes only candidate models that meet the configured promotion metric
+
+Key local files:
+
+| File | Purpose |
+|------|---------|
+| `strategy/config.example.json` | Safe template for scanner, Telegram, ML, news, and retraining settings |
+| `strategy/config.json` | Private local config with Telegram token/chat settings; ignored by Git |
+| `strategy/scanner.js` | Main 15-minute scanner entry point |
+| `strategy/ml/models/rnn.pt` | Active PyTorch GRU/RNN checkpoint used for inference |
+| `strategy/ml/models/rnn.json` | Human-readable metadata for the active model |
+| `strategy/ml/reports/retrain_history.jsonl` | Local retraining and model-promotion ledger; ignored by Git |
+| `scripts/trading_local.sh` | Local start/stop/restart/log/status helper for the scanner |
+
+Common local commands:
+
+```bash
+cd /Users/nikhiljha/tradingview-mcp
+
+./scripts/trading_local.sh start       # start TradingView debug mode and scanner
+./scripts/trading_local.sh restart     # reload scanner code and run one scan now
+./scripts/trading_local.sh status      # show LaunchAgent, keep-awake, and TradingView status
+./scripts/trading_local.sh logs        # follow scanner logs
+./scripts/trading_local.sh keep-awake-on
+```
+
+The detailed scanner documentation lives in [`strategy/README.md`](strategy/README.md), and the ML/RNN documentation lives in [`strategy/ml/README.md`](strategy/ml/README.md).
+
 ## Install with Claude Code
 
 Paste this into Claude Code and it will handle the rest:
