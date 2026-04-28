@@ -21,6 +21,9 @@ describe('trade feedback outcome accounting', () => {
       tradeId: 'abc12345',
       timestamp: '2026-01-01T00:00:00.000Z',
       symbol: 'EURUSD',
+      exchange: 'OANDA',
+      displaySymbol: 'EURUSD',
+      tradingViewSymbol: 'OANDA:EURUSD',
       direction: 'BUY',
       entry: 1.1,
       sl: 1.095,
@@ -37,6 +40,9 @@ describe('trade feedback outcome accounting', () => {
   it('makes Telegram alert headers visually loud', () => {
     const text = formatAlert({
       symbol: 'EURUSD',
+      exchange: 'OANDA',
+      displaySymbol: 'EURUSD',
+      tradingViewSymbol: 'OANDA:EURUSD',
       direction: 'BUY',
       entry: 1.1,
       sl: 1.095,
@@ -49,6 +55,8 @@ describe('trade feedback outcome accounting', () => {
       breakdown: { htfAlignment: 3 },
       details: {},
     });
-    assert.match(text.split('\n')[0], /^🚨 ❗❗❗ 🟢 BUY \*EURUSD\*/);
+    const lines = text.split('\n');
+    assert.match(lines[0], /^🚨 ❗❗❗ 🟢 BUY \*OANDA:EURUSD\*/);
+    assert.equal(lines[1], '*Exchange:* `OANDA` | *Symbol:* `EURUSD`');
   });
 });

@@ -99,6 +99,9 @@ export function recordScanSnapshot(config, symbol, signal) {
   const payload = {
     timestamp: new Date().toISOString(),
     symbol,
+    exchange: signal.exchange,
+    displaySymbol: signal.displaySymbol,
+    tradingViewSymbol: signal.tradingViewSymbol,
     direction: signal.direction,
     score: signal.score,
     rr: signal.rr,

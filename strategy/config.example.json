@@ -5,7 +5,7 @@
     "last_update_id": 0
   },
   "weekdayPairs": [
-    { "symbol": "EURUSD",  "name": "Euro/Dollar" },
+    { "symbol": "EURUSD",  "name": "Euro/Dollar", "exchange": "OANDA" },
     { "symbol": "GBPUSD",  "name": "Cable" },
     { "symbol": "USDCAD",  "name": "Dollar/CAD" },
     { "symbol": "EURCAD",  "name": "Euro/CAD" },

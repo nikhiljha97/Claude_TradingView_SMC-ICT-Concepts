@@ -63,6 +63,9 @@ export async function getUpdates(token, offset = 0) {
  */
 export function formatAlert(signal) {
   const dir = signal.direction === 'BUY' ? '🟢 BUY' : '🔴 SELL';
+  const exchange = signal.exchange || (String(signal.tradingViewSymbol || '').includes(':') ? String(signal.tradingViewSymbol).split(':')[0] : null);
+  const displaySymbol = signal.displaySymbol || (String(signal.tradingViewSymbol || '').split(':').pop()) || signal.symbol;
+  const feedLabel = exchange ? `${exchange}:${displaySymbol}` : displaySymbol;
   const breakdown = Object.entries(signal.breakdown)
     .map(([k, v]) => `  • ${k}: ${v}`)
     .join('\n');
@@ -128,7 +131,8 @@ export function formatAlert(signal) {
   }
 
   return [
-    `🚨 ❗❗❗ ${dir} *${signal.symbol}*  (15M) ❗❗❗`,
+    `🚨 ❗❗❗ ${dir} *${feedLabel}*  (15M) ❗❗❗`,
+    exchange ? `*Exchange:* \`${exchange}\` | *Symbol:* \`${displaySymbol}\`` : `*Symbol:* \`${displaySymbol}\``,
     ``,
     `*Entry:* \`${fmt(signal.entry)}\``,
     `*Stop:*  \`${fmt(signal.sl)}\``,

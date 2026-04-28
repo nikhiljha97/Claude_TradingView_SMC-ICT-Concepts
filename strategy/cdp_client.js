@@ -53,6 +53,15 @@ export async function setSymbol(symbol) {
   await waitForBars(3000);
 }
 
+export async function getChartSymbol() {
+  return await evaluate(`
+    (function() {
+      var chart = ${CHART_API};
+      return chart && typeof chart.symbol === 'function' ? chart.symbol() : null;
+    })()
+  `);
+}
+
 export async function setTimeframe(tf) {
   await evaluate(`
     (function() {

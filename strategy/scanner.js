@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { setSymbol, setTimeframe, getOhlcv, closeClient } from './cdp_client.js';
+import { setSymbol, setTimeframe, getOhlcv, getChartSymbol, closeClient } from './cdp_client.js';
 import { computeSignal } from './analyzer.js';
 import { scoreWithMl } from './ml_bridge.js';
 import { recordFetchedBars, recordScanSnapshot } from './market_store.js';
@@ -40,6 +40,24 @@ function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2
 
 function terminalAlert(message) {
   console.log(`${ANSI_BOLD}${ANSI_RED}${message}${ANSI_RESET}`);
+}
+
+function configuredSymbol(pair) {
+  if (pair.tradingViewSymbol) return pair.tradingViewSymbol;
+  if (pair.exchange && pair.symbol && !String(pair.symbol).includes(':')) {
+    return `${pair.exchange}:${pair.symbol}`;
+  }
+  return pair.symbol;
+}
+
+function instrumentIdentity(configured, resolved) {
+  const value = String(resolved || configured || '');
+  const [exchange, ...rest] = value.includes(':') ? value.split(':') : [null, value];
+  return {
+    exchange: exchange || null,
+    displaySymbol: rest.join(':') || value,
+    tradingViewSymbol: value,
+  };
 }
 
 function pidIsRunning(pid) {
@@ -194,7 +212,13 @@ async function scoreDirectionalProbe(config, payload, direction) {
 
 async function scanSymbol(pair, config, weights) {
   console.log(`[scanner] Scanning ${pair.symbol}...`);
-  await setSymbol(pair.symbol);
+  const requestedSymbol = configuredSymbol(pair);
+  await setSymbol(requestedSymbol);
+  const resolvedSymbol = await getChartSymbol().catch(() => null);
+  const identity = instrumentIdentity(requestedSymbol, resolvedSymbol);
+  if (identity.exchange) {
+    console.log(`[scanner] Feed: ${identity.exchange}:${identity.displaySymbol}`);
+  }
 
   // Fetch OHLCV at all timeframes (chart switches between calls)
   const barsWeekly = await fetchTimeframeBars(pair.symbol, 'W', 30);
@@ -221,6 +245,9 @@ async function scanSymbol(pair, config, weights) {
     bars4H, bars1H, bars15M, barsDaily, barsWeekly,
     weights: eff,
   });
+  signal.exchange = identity.exchange;
+  signal.displaySymbol = identity.displaySymbol;
+  signal.tradingViewSymbol = identity.tradingViewSymbol;
 
   const mlPayload = {
     signal,
