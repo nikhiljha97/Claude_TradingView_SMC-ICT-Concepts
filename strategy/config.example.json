@@ -67,7 +67,7 @@
     "enabled": true,
     "python": ".venv/bin/python",
     "modelPath": "strategy/ml/models/rnn.pt",
-    "minProbability": 0.55,
+    "minProbability": 0.45,
     "probeWhenNoSignal": true,
     "failOpen": false,
     "timeoutMs": 30000,

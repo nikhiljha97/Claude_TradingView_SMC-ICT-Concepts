@@ -22,7 +22,7 @@ export function mlConfig(config) {
     modelPath: resolveModelPath(config?.ml?.modelPath),
     gprPath: resolveOptionalPath(config?.ml?.retrain?.gprPath || config?.ml?.gprPath),
     newsPath: resolveOptionalPath(config?.ml?.retrain?.newsPath || config?.ml?.newsPath),
-    minProbability: Number(config?.ml?.minProbability ?? 0.55),
+    minProbability: Number(config?.ml?.minProbability ?? 0.45),
     failOpen: config?.ml?.failOpen === true,
     timeoutMs: Number(config?.ml?.timeoutMs ?? 8000),
   };
