@@ -3,13 +3,16 @@ indicator("NeuroTrader Structure Companion", overlay=true, max_lines_count=300, 
 
 // Visual companion for the local NeuroTrader scanner.
 // It mirrors the scanner/model vocabulary: swing pivots, CHOCH/MSS, OTE/Fib zones,
-// liquidity sweeps, and multi-scale structure alignment.
+// liquidity sweeps, CISD displacement, and multi-scale structure alignment.
 
 groupStructure = "Structure"
 pivotLen = input.int(3, "Fractal pivot length", minval=2, maxval=10, group=groupStructure)
 sweepWindow = input.int(20, "MSS sweep lookback bars", minval=5, maxval=80, group=groupStructure)
 showSwingLabels = input.bool(true, "Show swing labels", group=groupStructure)
 showBreakLabels = input.bool(true, "Show BOS / CHOCH / MSS labels", group=groupStructure)
+showCisdLabels = input.bool(true, "Show CISD displacement labels", group=groupStructure)
+cisdBodyMultiplier = input.float(1.25, "CISD body > avg body multiplier", minval=0.5, maxval=5.0, step=0.05, group=groupStructure)
+cisdLookback = input.int(10, "CISD average body lookback", minval=3, maxval=50, group=groupStructure)
 
 groupFib = "Fib / OTE"
 showOte = input.bool(true, "Show OTE zone", group=groupFib)
@@ -39,6 +42,8 @@ var int brokenHighBar = na
 var int brokenLowBar = na
 var int lastBullSweepBar = na
 var int lastBearSweepBar = na
+var int lastBullCisdBar = na
+var int lastBearCisdBar = na
 
 var box oteBox = na
 var line fib618Line = na
@@ -91,6 +96,15 @@ if not na(pl)
 
 sweepBull = not na(lastLow) and low < lastLow and close > lastLow
 sweepBear = not na(lastHigh) and high > lastHigh and close < lastHigh
+bodySize = math.abs(close - open)
+avgBody = ta.sma(math.abs(close - open), cisdLookback)
+largeBody = not na(avgBody) and bodySize > avgBody * cisdBodyMultiplier
+prevBodyHigh = math.max(open[1], close[1])
+prevBodyLow = math.min(open[1], close[1])
+recentBullSweepForCisd = not na(lastBullSweepBar) and bar_index - lastBullSweepBar <= sweepWindow
+recentBearSweepForCisd = not na(lastBearSweepBar) and bar_index - lastBearSweepBar <= sweepWindow
+bullCisd = recentBullSweepForCisd and close > prevBodyHigh and close > open and largeBody and lastBullCisdBar != bar_index
+bearCisd = recentBearSweepForCisd and close < prevBodyLow and close < open and largeBody and lastBearCisdBar != bar_index
 
 if sweepBull
     lastBullSweepBar := bar_index
@@ -101,6 +115,18 @@ if sweepBear
     lastBearSweepBar := bar_index
     if showBreakLabels
         f_label(bar_index, high, "BSL sweep", label.style_label_down, color.new(bearColor, 0), color.white)
+
+if bullCisd
+    lastBullCisdBar := bar_index
+    if showCisdLabels
+        line.new(bar_index - 1, prevBodyHigh, bar_index, prevBodyHigh, color=color.new(bullColor, 0), style=line.style_dotted, width=2)
+        f_label(bar_index, low, "CISD ↑", label.style_label_up, color.new(structureColor, 0), color.white)
+
+if bearCisd
+    lastBearCisdBar := bar_index
+    if showCisdLabels
+        line.new(bar_index - 1, prevBodyLow, bar_index, prevBodyLow, color=color.new(bearColor, 0), style=line.style_dotted, width=2)
+        f_label(bar_index, high, "CISD ↓", label.style_label_down, color.new(structureColor, 0), color.white)
 
 breakHigh = not na(lastHigh) and close > lastHigh and brokenHighBar != lastHighBar
 breakLow = not na(lastLow) and close < lastLow and brokenLowBar != lastLowBar
