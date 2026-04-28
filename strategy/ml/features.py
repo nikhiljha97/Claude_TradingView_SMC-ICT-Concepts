@@ -45,7 +45,23 @@ FEATURE_FIELDS = (
     "gpr_ai_change_7", "gpr_ai_z_90", "news_geo_score", "news_geo_count",
     "news_conflict_score", "news_energy_score", "news_us_score",
     "news_europe_score", "news_russia_score", "news_china_score",
-    "news_middle_east_score", "news_global_score",
+    "news_middle_east_score", "news_global_score", "news_fed_policy_score",
+    "news_ecb_policy_score", "news_boe_policy_score", "news_boj_policy_score",
+    "news_boc_policy_score", "news_inflation_score", "news_employment_score",
+    "news_growth_score", "news_fx_intervention_score",
+    "news_dollar_strength_score", "news_risk_sentiment_score",
+    "news_macro_score",
+)
+
+NEWS_FEATURES = (
+    "news_geo_score", "news_geo_count", "news_conflict_score", "news_energy_score",
+    "news_us_score", "news_europe_score", "news_russia_score", "news_china_score",
+    "news_middle_east_score", "news_global_score", "news_fed_policy_score",
+    "news_ecb_policy_score", "news_boe_policy_score", "news_boj_policy_score",
+    "news_boc_policy_score", "news_inflation_score", "news_employment_score",
+    "news_growth_score", "news_fx_intervention_score",
+    "news_dollar_strength_score", "news_risk_sentiment_score",
+    "news_macro_score",
 )
 
 
@@ -122,16 +138,8 @@ def load_news(path: str | None) -> dict[str, dict]:
                 continue
             try:
                 rows[date] = {
-                    "news_geo_score": float(row.get("geo_score", 0) or 0),
-                    "news_geo_count": float(row.get("geo_count", 0) or 0),
-                    "news_conflict_score": float(row.get("conflict_score", 0) or 0),
-                    "news_energy_score": float(row.get("energy_score", 0) or 0),
-                    "news_us_score": float(row.get("us_score", 0) or 0),
-                    "news_europe_score": float(row.get("europe_score", 0) or 0),
-                    "news_russia_score": float(row.get("russia_score", 0) or 0),
-                    "news_china_score": float(row.get("china_score", 0) or 0),
-                    "news_middle_east_score": float(row.get("middle_east_score", 0) or 0),
-                    "news_global_score": float(row.get("global_score", 0) or 0),
+                    feature: float(row.get(feature.removeprefix("news_"), 0) or 0)
+                    for feature in NEWS_FEATURES
                 }
             except ValueError:
                 continue
@@ -139,18 +147,7 @@ def load_news(path: str | None) -> dict[str, dict]:
 
 
 def default_news_features() -> dict:
-    return {
-        "news_geo_score": 0.0,
-        "news_geo_count": 0.0,
-        "news_conflict_score": 0.0,
-        "news_energy_score": 0.0,
-        "news_us_score": 0.0,
-        "news_europe_score": 0.0,
-        "news_russia_score": 0.0,
-        "news_china_score": 0.0,
-        "news_middle_east_score": 0.0,
-        "news_global_score": 0.0,
-    }
+    return {feature: 0.0 for feature in NEWS_FEATURES}
 
 
 def swing_flags(window: list[dict]) -> tuple[float, float, float]:

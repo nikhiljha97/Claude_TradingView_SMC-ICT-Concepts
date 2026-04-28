@@ -99,6 +99,8 @@ OHLCV history → SMC/ICT/Pivot setup → ML probability → Telegram alert
 
 If the model is missing or below the configured probability threshold, the alert is blocked. The model receives price/volume features plus explicit SMC/ICT, auction-market, side, official AI-GPR geopolitical-risk features, and near-real-time headline-pressure features from GDELT/RSS feeds.
 
+The news context includes broad geopolitical feeds plus macro and central-bank pressure columns for the Fed, ECB, BoE, BoJ, BoC, inflation, employment, growth, FX intervention, dollar strength, and risk sentiment. Existing checkpoints remain compatible because inference uses the feature list embedded in the checkpoint metadata; newly promoted retrains can adopt the expanded feature schema.
+
 The ML feature layer also includes research-grade confluence columns:
 
 - CHOCH/MSS quality: direction, break strength, recency, pivot regularity, swing-sequence quality.

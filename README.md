@@ -24,7 +24,7 @@ The live local scanner is designed to run on macOS through `launchd`.
 - Watchlists: weekday and weekend markets from `strategy/config.json`
 - Alerts: Telegram messages only when all gates pass
 - Risk filter: minimum actual risk/reward of `1:2.5`
-- ML gate: required PyTorch recurrent model using 76 engineered features; GRU checkpoints remain supported and LSTM retrains can be enabled
+- ML gate: required PyTorch recurrent model using the feature schema stored in the active checkpoint; GRU checkpoints remain supported and LSTM retrains can be enabled
 - Learning loop: live OHLCV storage, Telegram feedback, hourly retraining, model promotion ledger
 - Safety: no broker connection, no order placement, no automatic execution
 
@@ -110,9 +110,10 @@ Neural feature families include:
 | Auction | failed up/down, initiative buy/sell, balance |
 | Confluence | CHOCH/MSS quality, Fib/OTE quality, multi-scale structure alignment |
 | Geopolitical/news | AI-GPR, oil/non-oil risk, RSS/GDELT headline pressure |
+| Macro/news | Fed, ECB, BoE, BoJ, BoC, inflation, employment, growth, FX intervention, dollar strength, risk sentiment |
 | Side | long/short encoding |
 
-The current active neural model has `76` features. Check your exact live model with:
+The feature builder now emits `88` neural inputs before any future extensions, including the new central-bank and macro headline fields. Existing checkpoints keep using the feature list stored inside their own `rnn.json`; after a promoted retrain, the active model will move onto the expanded schema. Check your exact live model with:
 
 ```bash
 npm run model:report

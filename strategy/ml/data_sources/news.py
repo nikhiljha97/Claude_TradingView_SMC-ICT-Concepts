@@ -31,10 +31,18 @@ from strategy.ml.common import RAW_DIR, ensure_dirs
 
 
 GDELT_DOC_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-GDELT_QUERY = (
-    "geopolitical risk OR war OR conflict OR missile OR sanctions OR invasion "
-    "OR troops OR ceasefire OR oil supply OR terrorism OR military"
-)
+GDELT_QUERIES = {
+    "geopolitical": (
+        "geopolitical risk OR war OR conflict OR missile OR sanctions OR invasion "
+        "OR troops OR ceasefire OR oil supply OR terrorism OR military"
+    ),
+    "macro_fx": (
+        "interest rate OR FOMC OR rate decision OR inflation OR CPI OR payrolls "
+        "OR GDP OR PMI OR unemployment OR central bank OR Powell OR Lagarde "
+        "OR Bailey OR Ueda OR Macklem OR hawkish OR dovish OR tapering OR forex "
+        "OR currency OR exchange rate OR yen intervention OR dollar"
+    ),
+}
 
 RSS_FEEDS = {
     "bbc_world": "https://feeds.bbci.co.uk/news/world/rss.xml",
@@ -43,12 +51,23 @@ RSS_FEEDS = {
     "dw_top": "https://rss.dw.com/rdf/rss-en-all",
     "npr_world": "https://feeds.npr.org/1004/rss.xml",
     "cnbc_world": "https://www.cnbc.com/id/100727362/device/rss/rss.html",
+    "fxstreet": "https://www.fxstreet.com/rss/news",
+    "investinglive": "https://www.investinglive.com/rss",
+    "fed_press": "https://www.federalreserve.gov/feeds/press_all.xml",
+    "fed_monetary_policy": "https://www.federalreserve.gov/feeds/press_monetary.xml",
+    "ecb_press": "https://www.ecb.europa.eu/rss/press.html",
+    "boe_news": "https://www.bankofengland.co.uk/rss/news",
+    "boc_press": "https://www.bankofcanada.ca/content_type/press-releases/feed/",
 }
 
 FIELDNAMES = [
     "date", "updated_at", "geo_count", "geo_score", "conflict_score",
     "energy_score", "us_score", "europe_score", "russia_score",
-    "china_score", "middle_east_score", "global_score",
+    "china_score", "middle_east_score", "global_score", "fed_policy_score",
+    "ecb_policy_score", "boe_policy_score", "boj_policy_score",
+    "boc_policy_score", "inflation_score", "employment_score",
+    "growth_score", "fx_intervention_score", "dollar_strength_score",
+    "risk_sentiment_score", "macro_score",
 ]
 
 CATEGORY_KEYWORDS = {
@@ -76,7 +95,58 @@ CATEGORY_KEYWORDS = {
         "global", "world", "geopolitical", "election", "inflation", "central bank",
         "trade", "tariff", "supply chain", "risk",
     ],
+    "fed_policy": [
+        "fomc", "federal reserve", "fed ", "powell", "fed funds", "dot plot",
+        "rate hike", "rate cut", "interest rate", "monetary policy",
+    ],
+    "ecb_policy": [
+        "ecb", "european central bank", "lagarde", "eurozone rate",
+        "deposit rate", "euro area inflation",
+    ],
+    "boe_policy": [
+        "bank of england", "boe", "bailey", "mpc", "uk rate",
+        "british inflation", "gilts",
+    ],
+    "boj_policy": [
+        "bank of japan", "boj", "ueda", "yen", "japanese rate",
+        "yield curve control", "jgb",
+    ],
+    "boc_policy": [
+        "bank of canada", "boc", "macklem", "canadian rate",
+        "canada inflation",
+    ],
+    "inflation": [
+        "cpi", "inflation", "consumer price", "core pce", "pce inflation",
+        "producer price", "ppi", "price pressures",
+    ],
+    "employment": [
+        "nfp", "nonfarm", "payrolls", "unemployment", "jobless claims",
+        "labor market", "labour market", "wages", "earnings",
+    ],
+    "growth": [
+        "gdp", "economic growth", "recession", "soft landing", "hard landing",
+        "pmi", "ism", "retail sales", "industrial production",
+    ],
+    "fx_intervention": [
+        "fx intervention", "yen intervention", "currency intervention",
+        "currency defense", "moj warning", "ministry of finance",
+    ],
+    "dollar_strength": [
+        "dxy", "dollar index", "dollar rally", "dollar strength",
+        "greenback", "us dollar", "u.s. dollar",
+    ],
+    "risk_sentiment": [
+        "risk-off", "risk on", "risk-off", "safe haven", "safe-haven",
+        "market turmoil", "equity selloff", "volatility",
+    ],
 }
+
+REGIONAL_CATEGORIES = ("us", "europe", "russia", "china", "middle_east", "global")
+MACRO_CATEGORIES = (
+    "fed_policy", "ecb_policy", "boe_policy", "boj_policy", "boc_policy",
+    "inflation", "employment", "growth", "fx_intervention",
+    "dollar_strength", "risk_sentiment",
+)
 
 
 def fetch_url(url: str, timeout: int = 8) -> bytes:
@@ -104,8 +174,16 @@ def parse_date(value: str | None) -> dt.date:
 
 
 def collect_gdelt(max_records: int, timeout: int) -> list[dict]:
+    rows = []
+    per_query = max(10, max_records // max(1, len(GDELT_QUERIES)))
+    for query_name, query in GDELT_QUERIES.items():
+        rows.extend(collect_gdelt_query(query, per_query, timeout, query_name))
+    return rows
+
+
+def collect_gdelt_query(query: str, max_records: int, timeout: int, query_name: str) -> list[dict]:
     params = {
-        "query": GDELT_QUERY,
+        "query": query,
         "mode": "artlist",
         "format": "json",
         "maxrecords": str(max_records),
@@ -115,7 +193,7 @@ def collect_gdelt(max_records: int, timeout: int) -> list[dict]:
     try:
         payload = json.loads(fetch_url(url, timeout=timeout).decode("utf-8", errors="replace"))
     except Exception as exc:
-        print(f"warning: gdelt fetch failed: {exc}", file=sys.stderr)
+        print(f"warning: gdelt fetch failed query={query_name}: {exc}", file=sys.stderr)
         return []
     rows = []
     for article in payload.get("articles", []):
@@ -149,6 +227,23 @@ def rss_items(xml_bytes: bytes, source: str) -> list[dict]:
             "date": parse_date(pub_date),
             "url": link,
         })
+    for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
+        title = entry.findtext("{http://www.w3.org/2005/Atom}title") or ""
+        summary = (
+            entry.findtext("{http://www.w3.org/2005/Atom}summary")
+            or entry.findtext("{http://www.w3.org/2005/Atom}content")
+            or ""
+        )
+        pub_date = entry.findtext("{http://www.w3.org/2005/Atom}updated") or entry.findtext("{http://www.w3.org/2005/Atom}published")
+        link_el = entry.find("{http://www.w3.org/2005/Atom}link")
+        link = link_el.attrib.get("href", "") if link_el is not None else ""
+        items.append({
+            "source": source,
+            "title": title,
+            "summary": summary,
+            "date": parse_date(pub_date),
+            "url": link,
+        })
     return items
 
 
@@ -174,10 +269,15 @@ def article_score(article: dict) -> dict:
     energy = keyword_score(text, CATEGORY_KEYWORDS["energy"])
     regional = {
         name: keyword_score(text, CATEGORY_KEYWORDS[name])
-        for name in ("us", "europe", "russia", "china", "middle_east", "global")
+        for name in REGIONAL_CATEGORIES
+    }
+    macro = {
+        name: keyword_score(text, CATEGORY_KEYWORDS[name])
+        for name in MACRO_CATEGORIES
     }
     geo = max(conflict, energy, *regional.values())
-    return {"geo": geo, "conflict": conflict, "energy": energy, **regional}
+    macro_score = max(macro.values()) if macro else 0.0
+    return {"geo": geo, "conflict": conflict, "energy": energy, "macro": macro_score, **regional, **macro}
 
 
 def aggregate(articles: list[dict]) -> list[dict]:
@@ -206,12 +306,9 @@ def aggregate(articles: list[dict]) -> list[dict]:
             "geo_score": geo_sum / total,
             "conflict_score": sum(score["conflict"] for score in scores) / total,
             "energy_score": sum(score["energy"] for score in scores) / total,
-            "us_score": sum(score["us"] for score in scores) / total,
-            "europe_score": sum(score["europe"] for score in scores) / total,
-            "russia_score": sum(score["russia"] for score in scores) / total,
-            "china_score": sum(score["china"] for score in scores) / total,
-            "middle_east_score": sum(score["middle_east"] for score in scores) / total,
-            "global_score": sum(score["global"] for score in scores) / total,
+            **{f"{name}_score": sum(score[name] for score in scores) / total for name in REGIONAL_CATEGORIES},
+            **{f"{name}_score": sum(score[name] for score in scores) / total for name in MACRO_CATEGORIES},
+            "macro_score": sum(score["macro"] for score in scores) / total,
         })
     return rows
 

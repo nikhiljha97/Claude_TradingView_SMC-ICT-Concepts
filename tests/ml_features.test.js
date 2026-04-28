@@ -35,7 +35,7 @@ function writeSyntheticBars(filePath) {
 
 function readCsv(filePath) {
   const [headerLine, ...lines] = fs.readFileSync(filePath, 'utf8').trim().split('\n');
-  const header = headerLine.split(',');
+  const header = headerLine.split(',').map(value => value.trim());
   return {
     header,
     rows: lines.map(line => Object.fromEntries(line.split(',').map((value, index) => [header[index], value]))),
@@ -65,5 +65,31 @@ describe('ML confluence features', () => {
     }
     const variedFields = CONFLUENCE_FIELDS.filter(field => new Set(rows.map(row => row[field])).size > 1);
     assert.ok(variedFields.length >= 3, `expected varied confluence fields, got ${variedFields.join(', ')}`);
+  });
+
+  it('emits macro and central-bank news columns when news context is supplied', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-ml-news-features-'));
+    const input = path.join(dir, 'synthetic.csv');
+    const news = path.join(dir, 'news.csv');
+    const output = path.join(dir, 'features.csv');
+    writeSyntheticBars(input);
+    fs.writeFileSync(news, [
+      'date,geo_count,geo_score,fed_policy_score,ecb_policy_score,inflation_score,employment_score,fx_intervention_score,dollar_strength_score,macro_score',
+      '2026-01-01,12,0.4,0.8,0.2,0.6,0.5,0.3,0.7,0.9',
+    ].join('\n'));
+
+    const python = process.env.PYTHON || 'python3';
+    const result = spawnSync(python, ['-m', 'strategy.ml.features', '--input', input, '--news', news, '--out', output], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const { header, rows } = readCsv(output);
+    for (const field of ['news_fed_policy_score', 'news_ecb_policy_score', 'news_inflation_score', 'news_macro_score']) {
+      assert.ok(header.includes(field), `${field} missing from feature header`);
+    }
+    assert.equal(Number(rows[0].news_fed_policy_score), 0.8);
+    assert.equal(Number(rows[0].news_macro_score), 0.9);
   });
 });
