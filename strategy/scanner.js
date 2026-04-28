@@ -168,6 +168,103 @@ function getNoTradeStatus(config, now = new Date()) {
   return { active: false };
 }
 
+function defaultAlertSessions() {
+  return [
+    {
+      name: 'asia_tokyo',
+      timezone: 'America/New_York',
+      days: [0, 1, 2, 3, 4],
+      start: '20:00',
+      end: '00:00',
+      allowedSymbolContains: ['JPY', 'AUD', 'NZD', 'BTC', 'ETH', 'XRP', 'SOL', 'ETC'],
+      extraScoreMargin: 0.75,
+      extraMlProbability: 0.05,
+    },
+    {
+      name: 'london_killzone',
+      timezone: 'America/New_York',
+      days: [1, 2, 3, 4, 5],
+      start: '02:00',
+      end: '05:00',
+    },
+    {
+      name: 'new_york_am_killzone',
+      timezone: 'America/New_York',
+      days: [1, 2, 3, 4, 5],
+      start: '08:30',
+      end: '11:00',
+    },
+    {
+      name: 'london_close_killzone',
+      timezone: 'America/New_York',
+      days: [1, 2, 3, 4, 5],
+      start: '10:00',
+      end: '12:00',
+    },
+  ];
+}
+
+function sessionIsActive(session, now = new Date()) {
+  if (session.enabled === false) return false;
+  const timezone = session.timezone || 'America/New_York';
+  const local = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const day = local.getDay();
+  const allowedDays = Array.isArray(session.days) ? session.days : [1, 2, 3, 4, 5];
+  if (!allowedDays.includes(day)) return false;
+  const currentMinutes = local.getHours() * 60 + local.getMinutes();
+  return isWithinClockWindow(currentMinutes, session.start, session.end);
+}
+
+function symbolAllowedInSession(symbol, session) {
+  const exact = Array.isArray(session.allowedSymbols)
+    ? session.allowedSymbols.map(s => String(s).toUpperCase())
+    : null;
+  const contains = Array.isArray(session.allowedSymbolContains)
+    ? session.allowedSymbolContains.map(s => String(s).toUpperCase())
+    : null;
+  const normalized = String(symbol || '').toUpperCase();
+  if (exact?.length && !exact.includes(normalized)) return false;
+  if (contains?.length && !contains.some(token => normalized.includes(token))) return false;
+  return true;
+}
+
+function getAlertSessionStatus(config, symbol, signal, mlResult, now = new Date()) {
+  const sessions = config.strategy?.alertSessions || defaultAlertSessions();
+  const active = sessions.filter(session => sessionIsActive(session, now));
+  if (!active.length) {
+    return { allow: false, reason: 'outside_ict_sessions' };
+  }
+
+  const baseScore = Number(config.strategy?.alertScoreThreshold || 0);
+  const baseProbability = Number(mlResult?.minProbability || config.ml?.minProbability || 0);
+  const evaluated = active.map(session => {
+    const requiredScore = baseScore + Number(session.extraScoreMargin || 0);
+    const requiredProbability = baseProbability + Number(session.extraMlProbability || 0);
+    const probability = Number(mlResult?.probability);
+    const checks = [];
+    if (!symbolAllowedInSession(symbol, session)) checks.push('symbol_not_allowed');
+    if (Number(signal?.score || 0) < requiredScore) checks.push(`score_below_${requiredScore.toFixed(2)}`);
+    if (Number(session.extraMlProbability || 0) > 0 && Number.isFinite(probability) && probability < requiredProbability) {
+      checks.push(`ml_below_${requiredProbability.toFixed(2)}`);
+    }
+    return {
+      name: session.name || 'ict_session',
+      timezone: session.timezone || 'America/New_York',
+      start: session.start,
+      end: session.end,
+      requiredScore,
+      requiredProbability,
+      allow: checks.length === 0,
+      reason: checks.join(',') || 'allowed',
+    };
+  });
+
+  return evaluated.find(session => session.allow) || {
+    ...evaluated[0],
+    allow: false,
+  };
+}
+
 async function processFeedback(config, weights) {
   const updates = await getUpdates(config.telegram.token, (config.telegram.last_update_id || 0) + 1);
   if (!updates.length) return [];
@@ -349,18 +446,24 @@ async function scanSymbol(pair, config, weights) {
   const continuity = signal.direction !== 'NONE'
     ? shouldAlert(signal, loadTrades(), config)
     : { allow: false, reason: 'no_signal' };
+  const alertSession = getAlertSessionStatus(config, pair.symbol, signal, mlResult);
   signal.details.continuity = continuity;
   signal.details.noTradeWindow = noTrade;
+  signal.details.alertSession = alertSession;
   if (signal.direction !== 'NONE' && !continuity.allow) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${continuity.reason}`);
   }
   if (signal.direction !== 'NONE' && noTrade.active) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: no_trade_window ${noTrade.start}-${noTrade.end} ${noTrade.timezone}`);
   }
+  if (signal.direction !== 'NONE' && !alertSession.allow) {
+    console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${alertSession.reason}`);
+  }
 
   if (signal.score >= config.strategy.alertScoreThreshold &&
       signal.rr >= config.strategy.minRR &&
       !noTrade.active &&
+      alertSession.allow &&
       continuity.allow) {
     signal.tradeId = genTradeId();
     logAlert(signal);
@@ -387,6 +490,9 @@ async function scanSymbol(pair, config, weights) {
   }
   if (noTrade.active) {
     reasons.push(`no-trade window ${noTrade.start}-${noTrade.end} ${noTrade.timezone}`);
+  }
+  if (!alertSession.allow) {
+    reasons.push(`ICT session ${alertSession.reason}`);
   }
   console.log(`[scanner] No alert for ${pair.symbol} ${signal.direction}: ${reasons.join(', ')}`);
   return null;
@@ -422,6 +528,12 @@ async function main() {
   const noTrade = getNoTradeStatus(config);
   if (noTrade.active) {
     console.log(`[scanner] No-trade window active: ${noTrade.start}-${noTrade.end} ${noTrade.timezone}. Scans/data capture continue; new trade alerts are suppressed.`);
+  }
+  const activeSessions = (config.strategy?.alertSessions || defaultAlertSessions()).filter(session => sessionIsActive(session));
+  if (activeSessions.length) {
+    console.log(`[scanner] Active ICT alert session(s): ${activeSessions.map(s => `${s.name || 'ict_session'} ${s.start}-${s.end} ${s.timezone || 'America/New_York'}`).join(', ')}`);
+  } else {
+    console.log('[scanner] No active ICT alert session. Scans/data capture continue; new trade alerts are suppressed.');
   }
 
   const alerts = [];

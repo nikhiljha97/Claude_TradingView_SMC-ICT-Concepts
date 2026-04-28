@@ -130,6 +130,43 @@
         "start": "15:00",
         "end": "19:00"
       }
+    ],
+    "alertSessions": [
+      {
+        "name": "asia_tokyo",
+        "enabled": true,
+        "timezone": "America/New_York",
+        "days": [0, 1, 2, 3, 4],
+        "start": "20:00",
+        "end": "00:00",
+        "allowedSymbolContains": ["JPY", "AUD", "NZD", "BTC", "ETH", "XRP", "SOL", "ETC"],
+        "extraScoreMargin": 0.75,
+        "extraMlProbability": 0.05
+      },
+      {
+        "name": "london_killzone",
+        "enabled": true,
+        "timezone": "America/New_York",
+        "days": [1, 2, 3, 4, 5],
+        "start": "02:00",
+        "end": "05:00"
+      },
+      {
+        "name": "new_york_am_killzone",
+        "enabled": true,
+        "timezone": "America/New_York",
+        "days": [1, 2, 3, 4, 5],
+        "start": "08:30",
+        "end": "11:00"
+      },
+      {
+        "name": "london_close_killzone",
+        "enabled": true,
+        "timezone": "America/New_York",
+        "days": [1, 2, 3, 4, 5],
+        "start": "10:00",
+        "end": "12:00"
+      }
     ]
   },
   "alertContinuity": {
