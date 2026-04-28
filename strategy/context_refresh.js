@@ -38,6 +38,9 @@ export function refreshNewsContext(config) {
   const minMinutes = Number(refresh.minMinutesBetweenRuns ?? 15);
   const timeoutMs = Number(refresh.timeoutMs ?? 20000);
   const sourceTimeoutSec = Math.max(3, Math.floor(Number(refresh.sourceTimeoutMs ?? 8000) / 1000));
+  const maxGdeltRecords = Number(refresh.maxGdeltRecords ?? 40);
+  const gdeltRetries = Number(refresh.gdeltRetries ?? 0);
+  const gdeltTimespan = refresh.gdeltTimespan || '1d';
   const python = config?.ml?.python || '.venv/bin/python';
 
   if (ageMinutes(newsPath) < minMinutes && readStateAgeMinutes(statePath) < minMinutes) {
@@ -54,6 +57,9 @@ export function refreshNewsContext(config) {
     path.join(__dirname, 'ml', 'data_sources', 'news.py'),
     '--out', newsPath,
     '--timeout', String(sourceTimeoutSec),
+    '--max-gdelt', String(maxGdeltRecords),
+    '--gdelt-retries', String(gdeltRetries),
+    '--gdelt-timespan', gdeltTimespan,
   ];
   const log = fs.openSync(logPath, 'a');
   const startedAt = Date.now();

@@ -409,7 +409,7 @@ Do not redistribute, sell, or externally publish TradingView or exchange market 
 - The scanner depends on the chart being available and responsive.
 - The ML model is only as good as its labels and data coverage.
 - A model can improve utility metrics without guaranteeing live profitability.
-- GDELT and RSS feeds can timeout or rate-limit; the system falls back to available news layers.
+- GDELT and RSS feeds can timeout or rate-limit; the system retries GDELT lightly, limits the query window, and falls back to available RSS/central-bank layers.
 - This is not low-latency infrastructure and not an order-execution engine.
 - Laptop sleep interrupts scheduled work.
 

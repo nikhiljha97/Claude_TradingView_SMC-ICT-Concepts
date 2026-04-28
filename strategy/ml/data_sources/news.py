@@ -18,6 +18,8 @@ import email.utils
 import hashlib
 import json
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -149,10 +151,29 @@ MACRO_CATEGORIES = (
 )
 
 
-def fetch_url(url: str, timeout: int = 8) -> bytes:
+RETRYABLE_HTTP_CODES = {408, 429, 500, 502, 503, 504}
+
+
+def fetch_url(url: str, timeout: int = 8, retries: int = 0, backoff: float = 1.0) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "tradingview-mcp-geonews/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        return response.read()
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in RETRYABLE_HTTP_CODES or attempt >= retries:
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else backoff * (2 ** attempt)
+            except ValueError:
+                delay = backoff * (2 ** attempt)
+            time.sleep(min(delay, 10.0))
+        except Exception:
+            if attempt >= retries:
+                raise
+            time.sleep(min(backoff * (2 ** attempt), 10.0))
+    raise RuntimeError("unreachable fetch retry state")
 
 
 def parse_date(value: str | None) -> dt.date:
@@ -173,25 +194,36 @@ def parse_date(value: str | None) -> dt.date:
         return dt.datetime.now(dt.timezone.utc).date()
 
 
-def collect_gdelt(max_records: int, timeout: int) -> list[dict]:
+def collect_gdelt(max_records: int, timeout: int, retries: int = 0, timespan: str = "1d") -> list[dict]:
+    if max_records <= 0:
+        return []
     rows = []
     per_query = max(10, max_records // max(1, len(GDELT_QUERIES)))
     for query_name, query in GDELT_QUERIES.items():
-        rows.extend(collect_gdelt_query(query, per_query, timeout, query_name))
+        rows.extend(collect_gdelt_query(query, per_query, timeout, query_name, retries, timespan))
+        time.sleep(0.75)
     return rows
 
 
-def collect_gdelt_query(query: str, max_records: int, timeout: int, query_name: str) -> list[dict]:
+def collect_gdelt_query(
+    query: str,
+    max_records: int,
+    timeout: int,
+    query_name: str,
+    retries: int,
+    timespan: str,
+) -> list[dict]:
     params = {
         "query": query,
         "mode": "artlist",
         "format": "json",
         "maxrecords": str(max_records),
         "sort": "hybridrel",
+        "timespan": timespan,
     }
     url = f"{GDELT_DOC_URL}?{urllib.parse.urlencode(params)}"
     try:
-        payload = json.loads(fetch_url(url, timeout=timeout).decode("utf-8", errors="replace"))
+        payload = json.loads(fetch_url(url, timeout=timeout, retries=retries, backoff=2.0).decode("utf-8", errors="replace"))
     except Exception as exc:
         print(f"warning: gdelt fetch failed query={query_name}: {exc}", file=sys.stderr)
         return []
@@ -337,13 +369,15 @@ def write_rows(out: Path, rows: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default=str(RAW_DIR / "news" / "geopolitical_news_daily.csv"))
-    parser.add_argument("--max-gdelt", type=int, default=100)
+    parser.add_argument("--max-gdelt", type=int, default=60)
     parser.add_argument("--timeout", type=int, default=8)
+    parser.add_argument("--gdelt-retries", type=int, default=0)
+    parser.add_argument("--gdelt-timespan", default="1d")
     args = parser.parse_args()
 
     ensure_dirs()
     out = Path(args.out)
-    articles = collect_gdelt(args.max_gdelt, args.timeout)
+    articles = collect_gdelt(args.max_gdelt, args.timeout, args.gdelt_retries, args.gdelt_timespan)
     articles.extend(collect_rss(args.timeout))
     rows = merge_existing(out, aggregate(articles))
     write_rows(out, rows)
