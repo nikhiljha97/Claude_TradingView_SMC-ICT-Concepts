@@ -9,6 +9,7 @@ const CDP_PORT = 9222;
 
 const CHART_API = "window.TradingViewApi._activeChartWidgetWV.value()";
 const BARS_PATH = "window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().bars()";
+const SYMBOL_LOAD_TIMEOUT_MS = 15000;
 
 let _client = null;
 
@@ -40,7 +41,66 @@ export async function evaluate(expression) {
   return result.result?.value;
 }
 
+function normalizeSymbol(value) {
+  return String(value || '')
+    .split(':')
+    .pop()
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase();
+}
+
+function symbolsMatch(requested, resolved) {
+  const req = normalizeSymbol(requested);
+  const got = normalizeSymbol(resolved);
+  return Boolean(req && got && req === got);
+}
+
+async function chartState() {
+  return await evaluate(`
+    (function() {
+      var chart = ${CHART_API};
+      var symbol = chart && typeof chart.symbol === 'function' ? chart.symbol() : null;
+      var resolution = chart && typeof chart.resolution === 'function' ? chart.resolution() : null;
+      var bars = ${BARS_PATH};
+      if (!bars || typeof bars.lastIndex !== 'function') {
+        return { symbol: symbol, resolution: resolution, barSignature: null, barCount: 0 };
+      }
+      var end = bars.lastIndex();
+      var start = bars.firstIndex();
+      var v = bars.valueAt(end);
+      return {
+        symbol: symbol,
+        resolution: resolution,
+        barCount: Math.max(0, end - start + 1),
+        barSignature: v ? [v[0], v[1], v[2], v[3], v[4]].join('|') : null,
+      };
+    })()
+  `);
+}
+
+async function waitForSymbolData(symbol, previousState) {
+  const started = Date.now();
+  const previousSymbol = previousState?.symbol;
+  const requireBarChange = previousSymbol && !symbolsMatch(symbol, previousSymbol);
+  let lastState = null;
+
+  while (Date.now() - started < SYMBOL_LOAD_TIMEOUT_MS) {
+    lastState = await chartState();
+    const symbolReady = symbolsMatch(symbol, lastState?.symbol);
+    const barsReady = lastState?.barCount > 0 && lastState?.barSignature;
+    const barsChanged = !requireBarChange || lastState.barSignature !== previousState?.barSignature;
+    if (symbolReady && barsReady && barsChanged) return lastState;
+    await waitForBars(350);
+  }
+
+  throw new Error(
+    `Symbol load timeout for ${symbol}; chart=${lastState?.symbol || 'unknown'} ` +
+    `barsChanged=${lastState?.barSignature !== previousState?.barSignature}`
+  );
+}
+
 export async function setSymbol(symbol) {
+  const before = await chartState().catch(() => null);
   await evaluate(`
     (function() {
       var chart = ${CHART_API};
@@ -50,7 +110,7 @@ export async function setSymbol(symbol) {
       });
     })()
   `);
-  await waitForBars(3000);
+  await waitForSymbolData(symbol, before);
 }
 
 export async function getChartSymbol() {
