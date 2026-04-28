@@ -1,0 +1,138 @@
+//@version=6
+indicator("NeuroTrader Structure Companion Compact", overlay=true, max_lines_count=300, max_labels_count=300, max_boxes_count=20)
+
+groupS = "Structure"
+pLen = input.int(3, "Fractal pivot length", minval=2, maxval=10, group=groupS)
+sweepWin = input.int(20, "Sweep lookback", minval=5, maxval=80, group=groupS)
+showSw = input.bool(true, "Show HH/LH/HL/LL", group=groupS)
+showBr = input.bool(true, "Show BOS/CHOCH/MSS", group=groupS)
+showCisd = input.bool(true, "Show CISD", group=groupS)
+cisdMult = input.float(1.25, "CISD body multiplier", minval=0.5, maxval=5, step=0.05, group=groupS)
+cisdLen = input.int(10, "CISD avg body lookback", minval=3, maxval=50, group=groupS)
+
+groupF = "Fib / OTE"
+showOte = input.bool(true, "Show OTE", group=groupF)
+showFib = input.bool(true, "Show Fib lines", group=groupF)
+
+groupC = "Dark Blue Colors"
+bull = input.color(color.rgb(0, 229, 255), "Bull cyan", group=groupC)
+bear = input.color(color.rgb(255, 55, 92), "Bear red", group=groupC)
+ote = input.color(color.rgb(255, 204, 77), "OTE amber", group=groupC)
+violet = input.color(color.rgb(177, 125, 255), "CISD violet", group=groupC)
+
+var float lh = na
+var float phh = na
+var float ll = na
+var float pll = na
+var int lhBar = na
+var int llBar = na
+var int brokenH = na
+var int brokenL = na
+var int bullSweepBar = na
+var int bearSweepBar = na
+var int trend = 0
+var box oteBox = na
+var line f618 = na
+var line f705 = na
+var line f79 = na
+var line f127 = na
+var line f1618 = na
+
+lab(x, y, t, st, bg, tc) =>
+    label.new(x, y, t, style=st, color=bg, textcolor=tc, size=size.tiny)
+
+delFib() =>
+    if not na(oteBox)
+        box.delete(oteBox)
+    if not na(f618)
+        line.delete(f618)
+    if not na(f705)
+        line.delete(f705)
+    if not na(f79)
+        line.delete(f79)
+    if not na(f127)
+        line.delete(f127)
+    if not na(f1618)
+        line.delete(f1618)
+
+pH = ta.pivothigh(high, pLen, pLen)
+pL = ta.pivotlow(low, pLen, pLen)
+
+if not na(pH)
+    phh := lh
+    lh := pH
+    lhBar := bar_index - pLen
+    if showSw
+        lab(lhBar, lh, not na(phh) ? (lh > phh ? "HH" : "LH") : "SH", label.style_label_down, color.new(bear, 10), color.white)
+
+if not na(pL)
+    pll := ll
+    ll := pL
+    llBar := bar_index - pLen
+    if showSw
+        lab(llBar, ll, not na(pll) ? (ll > pll ? "HL" : "LL") : "SL", label.style_label_up, color.new(bull, 10), color.black)
+
+sweepBull = not na(ll) and low < ll and close > ll
+sweepBear = not na(lh) and high > lh and close < lh
+if sweepBull
+    bullSweepBar := bar_index
+    lab(bar_index, low, "SSL sweep", label.style_label_up, color.new(bull, 0), color.black)
+if sweepBear
+    bearSweepBar := bar_index
+    lab(bar_index, high, "BSL sweep", label.style_label_down, color.new(bear, 0), color.white)
+
+avgBody = ta.sma(math.abs(close - open), cisdLen)
+bigBody = not na(avgBody) and math.abs(close - open) > avgBody * cisdMult
+recentBullSweep = not na(bullSweepBar) and bar_index - bullSweepBar <= sweepWin
+recentBearSweep = not na(bearSweepBar) and bar_index - bearSweepBar <= sweepWin
+bullCisd = recentBullSweep and close > math.max(open[1], close[1]) and close > open and bigBody
+bearCisd = recentBearSweep and close < math.min(open[1], close[1]) and close < open and bigBody
+if showCisd and bullCisd
+    lab(bar_index, low, "CISD UP", label.style_label_up, color.new(violet, 0), color.white)
+if showCisd and bearCisd
+    lab(bar_index, high, "CISD DN", label.style_label_down, color.new(violet, 0), color.white)
+
+breakH = not na(lh) and close > lh and brokenH != lhBar
+breakL = not na(ll) and close < ll and brokenL != llBar
+if breakH
+    brokenH := lhBar
+    txt = recentBullSweep ? "MSS UP" : trend < 0 ? "CHOCH UP" : "BOS UP"
+    trend := 1
+    if showBr
+        line.new(lhBar, lh, bar_index, lh, color=bull, width=2)
+        lab(bar_index, close, txt, label.style_label_up, color.new(bull, 0), color.black)
+if breakL
+    brokenL := llBar
+    txt = recentBearSweep ? "MSS DN" : trend > 0 ? "CHOCH DN" : "BOS DN"
+    trend := -1
+    if showBr
+        line.new(llBar, ll, bar_index, ll, color=bear, width=2)
+        lab(bar_index, close, txt, label.style_label_down, color.new(bear, 0), color.white)
+
+bullLeg = not na(ll) and not na(lh) and llBar < lhBar
+bearLeg = not na(ll) and not na(lh) and lhBar < llBar
+start = bullLeg ? ll : bearLeg ? lh : na
+end = bullLeg ? lh : bearLeg ? ll : na
+startBar = bullLeg ? llBar : bearLeg ? lhBar : na
+rng = not na(start) and not na(end) ? math.abs(end - start) : na
+
+if barstate.islast
+    delFib()
+    if showOte and not na(rng) and rng > 0
+        f1 = bullLeg ? end - rng * 0.618 : end + rng * 0.618
+        f2 = bullLeg ? end - rng * 0.705 : end + rng * 0.705
+        f3 = bullLeg ? end - rng * 0.79 : end + rng * 0.79
+        t1 = bullLeg ? end + rng * 0.272 : end - rng * 0.272
+        t2 = bullLeg ? end + rng * 0.618 : end - rng * 0.618
+        top = math.max(f1, f3)
+        bot = math.min(f1, f3)
+        bias = bullLeg ? bull : bear
+        oteBox := box.new(startBar, top, bar_index + 30, bot, bgcolor=color.new(ote, 86), border_color=color.new(ote, 25))
+        if showFib
+            f618 := line.new(startBar, f1, bar_index + 30, f1, color=ote, style=line.style_dotted)
+            f705 := line.new(startBar, f2, bar_index + 30, f2, color=ote, style=line.style_dashed)
+            f79 := line.new(startBar, f3, bar_index + 30, f3, color=ote, style=line.style_dotted)
+            f127 := line.new(startBar, t1, bar_index + 30, t1, color=color.new(bias, 20), style=line.style_dashed)
+            f1618 := line.new(startBar, t2, bar_index + 30, t2, color=bias, style=line.style_dashed, width=2)
+
+barcolor(trend == 1 ? color.new(bull, 72) : trend == -1 ? color.new(bear, 72) : na)
