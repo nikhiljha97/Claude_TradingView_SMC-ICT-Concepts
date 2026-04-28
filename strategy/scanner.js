@@ -31,9 +31,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const RUN_LOCK_PATH = path.join(__dirname, 'scanner.run.lock');
 const SCAN_SEPARATOR = '============================================================';
+const ANSI_RED = '\x1b[31m';
+const ANSI_BOLD = '\x1b[1m';
+const ANSI_RESET = '\x1b[0m';
 
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
 function saveConfig(c) { fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2)); }
+
+function terminalAlert(message) {
+  console.log(`${ANSI_BOLD}${ANSI_RED}${message}${ANSI_RESET}`);
+}
 
 function pidIsRunning(pid) {
   const numeric = Number(pid);
@@ -272,7 +279,9 @@ async function scanSymbol(pair, config, weights) {
     logAlert(signal);
     if (config.telegram.chat_id) {
       await sendMessage(config.telegram.token, config.telegram.chat_id, formatAlert(signal));
-      console.log(`[scanner] 🚨 ❗❗❗ ALERT SENT for ${pair.symbol} ${signal.direction} ❗❗❗`);
+      terminalAlert(`\n❗❗❗🚨🚨🚨 RED ALERT 🚨🚨🚨❗❗❗`);
+      terminalAlert(`[scanner] ALERT SENT for ${pair.symbol} ${signal.direction}`);
+      terminalAlert(`❗❗❗🚨🚨🚨 RED ALERT 🚨🚨🚨❗❗❗\n`);
     } else {
       console.log(`[scanner] Alert ready but no chat_id yet — message the bot with /start first.`);
     }
