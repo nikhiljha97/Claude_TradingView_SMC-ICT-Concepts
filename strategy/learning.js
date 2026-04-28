@@ -19,8 +19,10 @@ import crypto from 'crypto';
 const TRADES_LOG = path.resolve(import.meta.dirname || './', 'trades.json');
 const WEIGHTS_FILE = path.resolve(import.meta.dirname || './', 'weights.json');
 
-const EWMA_ALPHA = 0.15; // smoothing factor — newer trades weighted more
-const MIN_SAMPLES_TO_ADJUST = 5; // don't adjust weights until we have data
+const EWMA_ALPHA = 0.10; // smoothing factor — newer trades weighted more
+const MIN_SAMPLES_TO_ADJUST = 20; // avoid overfitting a tiny live sample
+const MIN_WEIGHT_MULTIPLIER = 0.60;
+const MAX_WEIGHT_MULTIPLIER = 1.40;
 
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -105,9 +107,15 @@ export function loadWeights(defaults) {
     // Merge any new weight keys added to config.json that aren't in weights.json yet
     let changed = false;
     for (const k of Object.keys(defaults)) {
-      if (!(k in stored.base)) {
-        stored.base[k]   = defaults[k];
+      if (!(k in stored.base) || stored.base[k] !== defaults[k]) {
+        stored.base[k] = defaults[k];
+        changed = true;
+      }
+      if (!(k in stored.ewma)) {
         stored.ewma[k]   = 0.5;
+        changed = true;
+      }
+      if (!(k in stored.counts)) {
         stored.counts[k] = 0;
         changed = true;
       }
@@ -137,8 +145,9 @@ export function effectiveWeights(weights) {
     if (count < MIN_SAMPLES_TO_ADJUST) {
       eff[k] = baseVal;
     } else {
-      // Scale by 2*edge: edge=0.5 → weight unchanged; edge=1 → 2x; edge=0 → 0
-      eff[k] = baseVal * Math.max(0.1, Math.min(2.0, 2 * ewma));
+      // Scale by edge, but keep online learning gentle. Live outcome samples are
+      // sparse and noisy, so EWMA should nudge conviction, not collapse scoring.
+      eff[k] = baseVal * Math.max(MIN_WEIGHT_MULTIPLIER, Math.min(MAX_WEIGHT_MULTIPLIER, 2 * ewma));
     }
   }
   return eff;
