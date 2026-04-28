@@ -1,0 +1,177 @@
+//@version=6
+indicator("NeuroTrader Structure Companion", overlay=true, max_lines_count=300, max_labels_count=300, max_boxes_count=50)
+
+// Visual companion for the local NeuroTrader scanner.
+// It mirrors the scanner/model vocabulary: swing pivots, CHOCH/MSS, OTE/Fib zones,
+// liquidity sweeps, and multi-scale structure alignment.
+
+groupStructure = "Structure"
+pivotLen = input.int(3, "Fractal pivot length", minval=2, maxval=10, group=groupStructure)
+sweepWindow = input.int(20, "MSS sweep lookback bars", minval=5, maxval=80, group=groupStructure)
+showSwingLabels = input.bool(true, "Show swing labels", group=groupStructure)
+showBreakLabels = input.bool(true, "Show BOS / CHOCH / MSS labels", group=groupStructure)
+
+groupFib = "Fib / OTE"
+showOte = input.bool(true, "Show OTE zone", group=groupFib)
+showFibLines = input.bool(true, "Show 0.618 / 0.705 / 0.79 lines", group=groupFib)
+showTargets = input.bool(true, "Show 1.272 / 1.618 extensions", group=groupFib)
+
+groupTheme = "Dark Blue Theme"
+bullColor = input.color(color.rgb(0, 229, 255), "Bull / cyan", group=groupTheme)
+bearColor = input.color(color.rgb(255, 55, 92), "Bear / red", group=groupTheme)
+oteColor = input.color(color.rgb(255, 204, 77), "OTE amber", group=groupTheme)
+neutralColor = input.color(color.rgb(150, 170, 210), "Neutral text", group=groupTheme)
+structureColor = input.color(color.rgb(177, 125, 255), "Structure violet", group=groupTheme)
+
+groupTable = "Panel"
+showPanel = input.bool(true, "Show structure panel", group=groupTable)
+
+var float lastHigh = na
+var int lastHighBar = na
+var float prevHigh = na
+var int prevHighBar = na
+var float lastLow = na
+var int lastLowBar = na
+var float prevLow = na
+var int prevLowBar = na
+var int trendState = 0
+var int brokenHighBar = na
+var int brokenLowBar = na
+var int lastBullSweepBar = na
+var int lastBearSweepBar = na
+
+var box oteBox = na
+var line fib618Line = na
+var line fib705Line = na
+var line fib79Line = na
+var line fib127Line = na
+var line fib1618Line = na
+var label oteLabel = na
+var table panel = table.new(position.top_right, 2, 6, border_width=1)
+
+f_label(_bar, _price, _text, _style, _bg, _txt) =>
+    label.new(_bar, _price, _text, style=_style, color=_bg, textcolor=_txt, size=size.tiny)
+
+f_resetFib() =>
+    if not na(oteBox)
+        box.delete(oteBox)
+    if not na(fib618Line)
+        line.delete(fib618Line)
+    if not na(fib705Line)
+        line.delete(fib705Line)
+    if not na(fib79Line)
+        line.delete(fib79Line)
+    if not na(fib127Line)
+        line.delete(fib127Line)
+    if not na(fib1618Line)
+        line.delete(fib1618Line)
+    if not na(oteLabel)
+        label.delete(oteLabel)
+
+ph = ta.pivothigh(high, pivotLen, pivotLen)
+pl = ta.pivotlow(low, pivotLen, pivotLen)
+
+if not na(ph)
+    prevHigh := lastHigh
+    prevHighBar := lastHighBar
+    lastHigh := ph
+    lastHighBar := bar_index - pivotLen
+    if showSwingLabels
+        highText = not na(prevHigh) ? (lastHigh > prevHigh ? "HH" : "LH") : "SH"
+        f_label(lastHighBar, lastHigh, highText, label.style_label_down, color.new(bearColor, 10), color.white)
+
+if not na(pl)
+    prevLow := lastLow
+    prevLowBar := lastLowBar
+    lastLow := pl
+    lastLowBar := bar_index - pivotLen
+    if showSwingLabels
+        lowText = not na(prevLow) ? (lastLow > prevLow ? "HL" : "LL") : "SL"
+        f_label(lastLowBar, lastLow, lowText, label.style_label_up, color.new(bullColor, 10), color.black)
+
+sweepBull = not na(lastLow) and low < lastLow and close > lastLow
+sweepBear = not na(lastHigh) and high > lastHigh and close < lastHigh
+
+if sweepBull
+    lastBullSweepBar := bar_index
+    if showBreakLabels
+        f_label(bar_index, low, "SSL sweep", label.style_label_up, color.new(bullColor, 0), color.black)
+
+if sweepBear
+    lastBearSweepBar := bar_index
+    if showBreakLabels
+        f_label(bar_index, high, "BSL sweep", label.style_label_down, color.new(bearColor, 0), color.white)
+
+breakHigh = not na(lastHigh) and close > lastHigh and brokenHighBar != lastHighBar
+breakLow = not na(lastLow) and close < lastLow and brokenLowBar != lastLowBar
+recentBullSweep = not na(lastBullSweepBar) and bar_index - lastBullSweepBar <= sweepWindow
+recentBearSweep = not na(lastBearSweepBar) and bar_index - lastBearSweepBar <= sweepWindow
+
+if breakHigh
+    brokenHighBar := lastHighBar
+    eventText = recentBullSweep ? "MSS ↑" : trendState < 0 ? "CHOCH ↑" : "BOS ↑"
+    trendState := 1
+    if showBreakLabels
+        line.new(lastHighBar, lastHigh, bar_index, lastHigh, color=color.new(bullColor, 0), width=2)
+        f_label(bar_index, close, eventText, label.style_label_up, color.new(bullColor, 0), color.black)
+
+if breakLow
+    brokenLowBar := lastLowBar
+    eventText = recentBearSweep ? "MSS ↓" : trendState > 0 ? "CHOCH ↓" : "BOS ↓"
+    trendState := -1
+    if showBreakLabels
+        line.new(lastLowBar, lastLow, bar_index, lastLow, color=color.new(bearColor, 0), width=2)
+        f_label(bar_index, close, eventText, label.style_label_down, color.new(bearColor, 0), color.white)
+
+hasBullLeg = not na(lastLow) and not na(lastHigh) and lastLowBar < lastHighBar
+hasBearLeg = not na(lastLow) and not na(lastHigh) and lastHighBar < lastLowBar
+legStart = hasBullLeg ? lastLow : hasBearLeg ? lastHigh : na
+legEnd = hasBullLeg ? lastHigh : hasBearLeg ? lastLow : na
+legStartBar = hasBullLeg ? lastLowBar : hasBearLeg ? lastHighBar : na
+legRange = not na(legStart) and not na(legEnd) ? math.abs(legEnd - legStart) : na
+
+if barstate.islast
+    f_resetFib()
+    if showOte and not na(legRange) and legRange > 0
+        isBullLeg = hasBullLeg
+        fib618 = isBullLeg ? legEnd - legRange * 0.618 : legEnd + legRange * 0.618
+        fib705 = isBullLeg ? legEnd - legRange * 0.705 : legEnd + legRange * 0.705
+        fib79 = isBullLeg ? legEnd - legRange * 0.79 : legEnd + legRange * 0.79
+        fib127 = isBullLeg ? legEnd + legRange * 0.272 : legEnd - legRange * 0.272
+        fib1618 = isBullLeg ? legEnd + legRange * 0.618 : legEnd - legRange * 0.618
+        top = math.max(fib618, fib79)
+        bottom = math.min(fib618, fib79)
+        biasColor = isBullLeg ? bullColor : bearColor
+        oteBox := box.new(left=legStartBar, top=top, right=bar_index + 30, bottom=bottom, bgcolor=color.new(oteColor, 86), border_color=color.new(oteColor, 25))
+        oteLabel := label.new(bar_index + 1, fib705, isBullLeg ? "Bull OTE 0.618-0.79" : "Bear OTE 0.618-0.79", style=label.style_label_left, color=color.new(oteColor, 10), textcolor=color.black, size=size.small)
+        if showFibLines
+            fib618Line := line.new(legStartBar, fib618, bar_index + 30, fib618, color=color.new(oteColor, 0), style=line.style_dotted)
+            fib705Line := line.new(legStartBar, fib705, bar_index + 30, fib705, color=color.new(oteColor, 0), style=line.style_dashed)
+            fib79Line := line.new(legStartBar, fib79, bar_index + 30, fib79, color=color.new(oteColor, 0), style=line.style_dotted)
+        if showTargets
+            fib127Line := line.new(legStartBar, fib127, bar_index + 30, fib127, color=color.new(biasColor, 15), style=line.style_dashed)
+            fib1618Line := line.new(legStartBar, fib1618, bar_index + 30, fib1618, color=color.new(biasColor, 0), style=line.style_dashed, width=2)
+
+ema20 = ta.ema(close, 20)
+ema50 = ta.ema(close, 50)
+ema100 = ta.ema(close, 100)
+shortTrend = ema20 > ema50 ? 1 : ema20 < ema50 ? -1 : 0
+midTrend = ema50 > ema100 ? 1 : ema50 < ema100 ? -1 : 0
+majorTrend = not na(lastHigh) and not na(prevHigh) and not na(lastLow) and not na(prevLow) ? (lastHigh > prevHigh and lastLow > prevLow ? 1 : lastHigh < prevHigh and lastLow < prevLow ? -1 : 0) : 0
+alignment = math.abs(shortTrend + midTrend + majorTrend) / 3.0
+
+barcolor(trendState == 1 ? color.new(bullColor, 70) : trendState == -1 ? color.new(bearColor, 70) : na)
+
+if barstate.islast and showPanel
+    table.cell(panel, 0, 0, "Neuro Structure", bgcolor=color.new(color.rgb(8, 18, 44), 0), text_color=color.white)
+    table.cell(panel, 1, 0, "Companion", bgcolor=color.new(color.rgb(8, 18, 44), 0), text_color=color.white)
+    table.cell(panel, 0, 1, "Trend", text_color=neutralColor)
+    table.cell(panel, 1, 1, trendState == 1 ? "Bullish" : trendState == -1 ? "Bearish" : "Neutral", text_color=trendState == 1 ? bullColor : trendState == -1 ? bearColor : neutralColor)
+    table.cell(panel, 0, 2, "Last High", text_color=neutralColor)
+    table.cell(panel, 1, 2, na(lastHigh) ? "n/a" : str.tostring(lastHigh, format.mintick), text_color=bearColor)
+    table.cell(panel, 0, 3, "Last Low", text_color=neutralColor)
+    table.cell(panel, 1, 3, na(lastLow) ? "n/a" : str.tostring(lastLow, format.mintick), text_color=bullColor)
+    table.cell(panel, 0, 4, "Alignment", text_color=neutralColor)
+    table.cell(panel, 1, 4, str.tostring(alignment * 100, "#") + "%", text_color=alignment > 0.66 ? structureColor : neutralColor)
+    table.cell(panel, 0, 5, "OTE", text_color=neutralColor)
+    table.cell(panel, 1, 5, hasBullLeg ? "Bull leg" : hasBearLeg ? "Bear leg" : "n/a", text_color=hasBullLeg ? bullColor : hasBearLeg ? bearColor : neutralColor)

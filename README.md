@@ -191,6 +191,7 @@ Commands:
 | `strategy/ml/model_report.py` | Active model and retrain-history report |
 | `strategy/ml/models/rnn.pt` | Active PyTorch checkpoint |
 | `strategy/ml/models/rnn.json` | Active model metadata |
+| `pine/neuro_structure_companion_v6.pine` | TradingView overlay for visual swing, MSS/CHOCH, Fib/OTE, and structure verification |
 | `scripts/trading_local.sh` | Local scanner start/stop/status/log helper |
 | `tests/ml_features.test.js` | Guardrail test for confluence feature generation |
 
