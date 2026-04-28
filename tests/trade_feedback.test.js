@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFeedback } from '../strategy/telegram.js';
+import { formatAlert, parseFeedback } from '../strategy/telegram.js';
 import { computeOutcomeMetrics } from '../strategy/learning.js';
 
 describe('trade feedback outcome accounting', () => {
@@ -32,5 +32,23 @@ describe('trade feedback outcome accounting', () => {
     assert.equal(metrics.durationBars15m, 6);
     assert.ok(Math.abs(metrics.realizedR - 2.5) < 1e-9);
     assert.ok(Math.abs(metrics.pipsCaptured - 125) < 1e-6);
+  });
+
+  it('makes Telegram alert headers visually loud', () => {
+    const text = formatAlert({
+      symbol: 'EURUSD',
+      direction: 'BUY',
+      entry: 1.1,
+      sl: 1.095,
+      tp1: 1.1125,
+      tp2: 1.12,
+      rr: 2.5,
+      score: 8,
+      maxScore: 13.2,
+      tradeId: 'abc12345',
+      breakdown: { htfAlignment: 3 },
+      details: {},
+    });
+    assert.match(text.split('\n')[0], /^🚨 ❗❗❗ 🟢 BUY \*EURUSD\*/);
   });
 });

@@ -272,7 +272,7 @@ async function scanSymbol(pair, config, weights) {
     logAlert(signal);
     if (config.telegram.chat_id) {
       await sendMessage(config.telegram.token, config.telegram.chat_id, formatAlert(signal));
-      console.log(`[scanner] 🚨 Alert sent for ${pair.symbol} ${signal.direction}`);
+      console.log(`[scanner] 🚨 ❗❗❗ ALERT SENT for ${pair.symbol} ${signal.direction} ❗❗❗`);
     } else {
       console.log(`[scanner] Alert ready but no chat_id yet — message the bot with /start first.`);
     }
@@ -322,7 +322,7 @@ async function main() {
   console.log(`[scanner] Session: ${weekend ? 'WEEKEND (crypto)' : 'WEEKDAY (forex/indices/crypto)'} — ${pairs.length} pairs`);
 
   const alerts = [];
-  for (const pair of pairs) {
+  for (const [index, pair] of pairs.entries()) {
     try {
       await processFeedback(config, weights);
     } catch (e) {
@@ -334,6 +334,7 @@ async function main() {
     } catch (e) {
       console.error(`[scanner] Error scanning ${pair.symbol}: ${e.message}`);
     }
+    if (index < pairs.length - 1) process.stdout.write('\n\n');
   }
 
   await closeClient();

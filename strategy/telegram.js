@@ -128,7 +128,7 @@ export function formatAlert(signal) {
   }
 
   return [
-    `${dir} *${signal.symbol}*  (15M)`,
+    `🚨 ❗❗❗ ${dir} *${signal.symbol}*  (15M) ❗❗❗`,
     ``,
     `*Entry:* \`${fmt(signal.entry)}\``,
     `*Stop:*  \`${fmt(signal.sl)}\``,
