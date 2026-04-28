@@ -37,10 +37,22 @@ function normalizeBar(bar) {
   return { timestamp, open, high, low, close, volume };
 }
 
-function existingTimestamps(filePath) {
-  if (!fs.existsSync(filePath)) return new Set();
-  const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1);
-  return new Set(lines.map(line => line.split(',')[0]));
+function rowForBar(bar) {
+  return `${bar.timestamp},${bar.open},${bar.high},${bar.low},${bar.close},${bar.volume}`;
+}
+
+function loadRows(filePath) {
+  const rows = new Map();
+  if (!fs.existsSync(filePath)) return rows;
+  const text = fs.readFileSync(filePath, 'utf8').trim();
+  if (!text) return rows;
+  const lines = text.split('\n').slice(1);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const timestamp = line.split(',')[0];
+    if (timestamp) rows.set(timestamp, line);
+  }
+  return rows;
 }
 
 export function appendBars(config, symbol, timeframe, bars) {
@@ -50,19 +62,33 @@ export function appendBars(config, symbol, timeframe, bars) {
   const filePath = path.join(root, `${safeName(symbol)}_${safeName(timeframe)}.csv`);
   if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, HEADER);
 
-  const seen = existingTimestamps(filePath);
-  const rows = [];
+  const existing = loadRows(filePath);
+  const incoming = new Map();
   for (const raw of bars || []) {
     const bar = normalizeBar(raw);
     if (!bar) continue;
     const key = String(bar.timestamp);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push(`${bar.timestamp},${bar.open},${bar.high},${bar.low},${bar.close},${bar.volume}`);
+    incoming.set(key, rowForBar(bar));
   }
-  rows.sort((a, b) => Number(a.split(',')[0]) - Number(b.split(',')[0]));
-  if (rows.length) fs.appendFileSync(filePath, rows.join('\n') + '\n');
-  return { filePath, written: rows.length };
+
+  let written = 0;
+  let updated = 0;
+  for (const [timestamp, row] of incoming.entries()) {
+    if (!existing.has(timestamp)) {
+      written += 1;
+    } else if (existing.get(timestamp) !== row) {
+      updated += 1;
+    } else {
+      continue;
+    }
+    existing.set(timestamp, row);
+  }
+
+  if (written || updated) {
+    const rows = [...existing.values()].sort((a, b) => Number(a.split(',')[0]) - Number(b.split(',')[0]));
+    fs.writeFileSync(filePath, HEADER + rows.join('\n') + '\n');
+  }
+  return { filePath, written, updated };
 }
 
 export function recordScanSnapshot(config, symbol, signal) {

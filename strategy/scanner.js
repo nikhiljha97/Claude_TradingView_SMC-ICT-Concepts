@@ -203,7 +203,10 @@ async function scanSymbol(pair, config, weights) {
     15: bars15M,
   }) || [];
   const written = stored.reduce((sum, item) => sum + (item.written || 0), 0);
-  if (written > 0) console.log(`[scanner] Stored ${written} new OHLCV bars for ${pair.symbol}`);
+  const updated = stored.reduce((sum, item) => sum + (item.updated || 0), 0);
+  if (written > 0 || updated > 0) {
+    console.log(`[scanner] Stored ${written} new / ${updated} updated OHLCV bars for ${pair.symbol}`);
+  }
 
   const eff = effectiveWeights(weights);
   const signal = computeSignal({

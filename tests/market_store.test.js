@@ -25,9 +25,28 @@ describe('market store', () => {
 
     assert.equal(first.written, 2);
     assert.equal(second.written, 0);
+    assert.equal(second.updated, 0);
     const file = path.join(config.dir, 'EUR_USD_15.csv');
     const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
     assert.equal(lines.length, 3);
+  });
+
+  it('updates an existing timestamp when TradingView revises the live candle', () => {
+    const config = tempConfig();
+    appendBars(config, 'EUR/USD', '15', [
+      { timestamp: 1000, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10 },
+    ]);
+
+    const result = appendBars(config, 'EUR/USD', '15', [
+      { timestamp: 1000, open: 1, high: 2.2, low: 0.4, close: 1.7, volume: 25 },
+    ]);
+
+    assert.equal(result.written, 0);
+    assert.equal(result.updated, 1);
+    const file = path.join(config.dir, 'EUR_USD_15.csv');
+    const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
+    assert.equal(lines.length, 2);
+    assert.equal(lines[1], '1000000,1,2.2,0.4,1.7,25');
   });
 
   it('records scan snapshots as jsonl', () => {
