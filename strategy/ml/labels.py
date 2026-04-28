@@ -16,7 +16,11 @@ from strategy.ml.common import PROCESSED_DIR, ensure_dirs, read_bars, safe_div, 
 from strategy.ml.features import FEATURE_FIELDS, build_features, load_gpr, load_news
 
 
-LABEL_FIELDS = (*FEATURE_FIELDS, "side_long", "side_short", "side", "tp", "sl", "horizon", "label", "bars_to_event")
+LABEL_FIELDS = (
+    *FEATURE_FIELDS,
+    "side_long", "side_short", "side", "tp", "sl", "horizon", "label", "bars_to_event",
+    "exit_price", "realized_r", "duration_minutes", "duration_bars_15m", "sample_weight",
+)
 
 
 def label_rows(bars: list[dict], side: str, tp_atr: float, sl_atr: float, horizon: int, gpr=None, news=None) -> list[dict]:
@@ -70,6 +74,11 @@ def label_rows(bars: list[dict], side: str, tp_atr: float, sl_atr: float, horizo
             "horizon": horizon,
             "label": label,
             "bars_to_event": bars_to_event,
+            "exit_price": "",
+            "realized_r": "",
+            "duration_minutes": "",
+            "duration_bars_15m": "",
+            "sample_weight": 1.0,
         })
     return rows
 

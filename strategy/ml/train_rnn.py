@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train a small GRU model on labeled feature sequences.
+"""Train a small GRU/LSTM model on labeled feature sequences.
 
 Requires PyTorch:
   python -m pip install torch
@@ -43,18 +43,20 @@ def load_rows(path: str):
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             try:
-                rows.append(([feature_value(row, k) for k in FEATURES], int(row["label"])))
+                weight = float(row.get("sample_weight") or 1.0)
+                rows.append(([feature_value(row, k) for k in FEATURES], int(row["label"]), max(0.1, min(5.0, weight))))
             except (KeyError, ValueError):
                 continue
     return rows
 
 
 def make_sequences(rows, seq_len: int):
-    xs, ys = [], []
+    xs, ys, ws = [], [], []
     for i in range(seq_len, len(rows)):
         xs.append([rows[j][0] for j in range(i - seq_len, i)])
         ys.append(rows[i][1])
-    return xs, ys
+        ws.append(rows[i][2])
+    return xs, ys, ws
 
 
 def normalize_sequences(xs):
@@ -131,7 +133,7 @@ def classification_metrics(labels: list[int], probs: list[float]) -> dict:
     }
 
 
-def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_size: int, out_path: str):
+def train_model(input_path: str, seq_len: int, hidden: int, cell: str, epochs: int, batch_size: int, out_path: str):
     torch, nn = require_torch()
     random.seed(42)
     torch.manual_seed(42)
@@ -140,31 +142,34 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
     if len(rows) < seq_len + 500:
         raise SystemExit("Need more labeled rows before training an RNN.")
 
-    xs, ys = make_sequences(rows, seq_len)
+    xs, ys, sample_weights = make_sequences(rows, seq_len)
     xs, means, stds = normalize_sequences(xs)
     split = int(len(xs) * 0.8)
     x_train = torch.tensor(xs[:split], dtype=torch.float32)
     y_train = torch.tensor(ys[:split], dtype=torch.float32).view(-1, 1)
+    w_train = torch.tensor(sample_weights[:split], dtype=torch.float32).view(-1, 1)
     x_test = torch.tensor(xs[split:], dtype=torch.float32)
     y_test = torch.tensor(ys[split:], dtype=torch.float32).view(-1, 1)
     print(f"samples train={len(x_train)} test={len(x_test)} seq_len={seq_len} features={len(FEATURES)}", flush=True)
 
-    class GRUClassifier(nn.Module):
+    class RecurrentClassifier(nn.Module):
         def __init__(self):
             super().__init__()
-            self.gru = nn.GRU(input_size=len(FEATURES), hidden_size=hidden, batch_first=True)
+            recurrent = nn.LSTM if cell == "lstm" else nn.GRU
+            self.rnn = recurrent(input_size=len(FEATURES), hidden_size=hidden, batch_first=True)
             self.head = nn.Linear(hidden, 1)
 
         def forward(self, x):
-            _, h = self.gru(x)
+            _, state = self.rnn(x)
+            h = state[0] if cell == "lstm" else state
             return self.head(h[-1])
 
-    model = GRUClassifier()
+    model = RecurrentClassifier()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
     positives = float(y_train.sum().item())
     negatives = float(y_train.numel() - positives)
     pos_weight = torch.tensor([negatives / max(1.0, positives)], dtype=torch.float32)
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
 
     for epoch in range(epochs):
         model.train()
@@ -175,8 +180,9 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
             idx = order[start:start + batch_size]
             xb = x_train[idx]
             yb = y_train[idx]
+            wb = w_train[idx]
             opt.zero_grad()
-            loss = loss_fn(model(xb), yb)
+            loss = (loss_fn(model(xb), yb) * wb).mean()
             loss.backward()
             opt.step()
             total_loss += loss.item()
@@ -200,15 +206,17 @@ def train_model(input_path: str, seq_len: int, hidden: int, epochs: int, batch_s
         "stds": stds,
         "seq_len": seq_len,
         "hidden": hidden,
+        "cell": cell,
         "test_accuracy": accuracy,
         "metrics": metrics,
     }
     torch.save(checkpoint, out)
     summary = {
-        "type": "gru",
+        "type": cell,
         "features": FEATURES,
         "seq_len": seq_len,
         "hidden": hidden,
+        "cell": cell,
         "test_accuracy": accuracy,
         "metrics": metrics,
         "train_samples": len(x_train),
@@ -224,13 +232,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--cell", choices=("gru", "lstm"), default="gru")
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--hidden", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--out", default=str(MODEL_DIR / "rnn.pt"))
     args = parser.parse_args()
 
-    train_model(args.input, args.seq_len, args.hidden, args.epochs, args.batch_size, args.out)
+    train_model(args.input, args.seq_len, args.hidden, args.cell, args.epochs, args.batch_size, args.out)
 
 
 if __name__ == "__main__":

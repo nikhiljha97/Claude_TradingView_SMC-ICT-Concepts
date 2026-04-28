@@ -46,6 +46,7 @@ export function maybeStartRetraining(config) {
     '--min-bars', String(retrain.minBars || 250),
     '--seq-len', String(retrain.seqLen || 32),
     '--hidden', String(retrain.hidden || 32),
+    '--cell', String(retrain.cell || 'gru'),
     '--epochs', String(retrain.epochs || 3),
     '--lock', lockPath,
   ];

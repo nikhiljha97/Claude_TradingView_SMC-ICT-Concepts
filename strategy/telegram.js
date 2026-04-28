@@ -148,16 +148,23 @@ export function formatAlert(signal) {
     `\`YES ${signal.tradeId}\` _→ activates cooldown (won't re-alert same setup)_`,
     `\`NO ${signal.tradeId}\` _→ skipped (will re-alert if setup holds)_`,
     `_Once in trade:_ \`TP HIT ${signal.tradeId}\` _or_ \`SL HIT ${signal.tradeId}\``,
+    `_Optional exact exit:_ \`TP HIT ${signal.tradeId} 216.25\``,
   ].join('\n');
 }
 
 /**
- * Parse a feedback message: "TP HIT abc123" or "SL HIT xyz789".
- * Returns { outcome: 'TP'|'SL', tradeId } or null.
+ * Parse a feedback message: "TP HIT abc123", "SL HIT xyz789", or with an
+ * optional exact exit price: "TP HIT abc123 216.25".
+ * Returns { outcome: 'TP'|'SL', tradeId, exitPrice? } or null.
  */
 export function parseFeedback(text) {
   if (!text) return null;
-  const m = text.trim().match(/^(TP|SL)\s+HIT\s+([a-z0-9]+)/i);
+  const m = text.trim().match(/^(TP|SL)\s+HIT\s+([a-z0-9]+)(?:\s+@?\s*([-+]?\d+(?:\.\d+)?))?/i);
   if (!m) return null;
-  return { outcome: m[1].toUpperCase(), tradeId: m[2].toLowerCase() };
+  const exitPrice = m[3] != null ? Number(m[3]) : null;
+  return {
+    outcome: m[1].toUpperCase(),
+    tradeId: m[2].toLowerCase(),
+    ...(Number.isFinite(exitPrice) ? { exitPrice } : {}),
+  };
 }

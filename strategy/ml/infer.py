@@ -105,24 +105,34 @@ def score_rnn(model_path: Path, bars: list[dict], signal: dict, gpr=None, news=N
     for row in rows[-seq_len:]:
         seq.append([(float(row.get(name, 0.0)) - means[i]) / stds[i] for i, name in enumerate(features)])
 
-    class GRUClassifier(nn.Module):
+    cell = checkpoint.get("cell") or checkpoint.get("type") or "gru"
+
+    class RecurrentClassifier(nn.Module):
         def __init__(self):
             super().__init__()
-            self.gru = nn.GRU(input_size=len(features), hidden_size=checkpoint["hidden"], batch_first=True)
+            recurrent = nn.LSTM if cell == "lstm" else nn.GRU
+            self.rnn = recurrent(input_size=len(features), hidden_size=checkpoint["hidden"], batch_first=True)
             self.head = nn.Linear(checkpoint["hidden"], 1)
 
         def forward(self, x):
-            _, h = self.gru(x)
+            _, state = self.rnn(x)
+            h = state[0] if cell == "lstm" else state
             return self.head(h[-1])
 
-    model = GRUClassifier()
-    model.load_state_dict(checkpoint["state_dict"])
+    state_dict = checkpoint["state_dict"]
+    if any(key.startswith("gru.") or key.startswith("lstm.") for key in state_dict):
+        state_dict = {
+            key.replace("gru.", "rnn.", 1).replace("lstm.", "rnn.", 1): value
+            for key, value in state_dict.items()
+        }
+    model = RecurrentClassifier()
+    model.load_state_dict(state_dict)
     model.eval()
     with torch.no_grad():
         probability = torch.sigmoid(model(torch.tensor([seq], dtype=torch.float32))).item()
     return {
         "success": True,
-        "modelType": "gru",
+        "modelType": cell,
         "probability": probability,
         "thresholdPassed": probability >= 0.5,
         "features": features,

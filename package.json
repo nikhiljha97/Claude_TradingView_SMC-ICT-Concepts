@@ -16,7 +16,7 @@
     "tv": "node src/cli/index.js",
     "test": "node --test tests/e2e.test.js tests/pine_analyze.test.js",
     "test:e2e": "node --test tests/e2e.test.js",
-    "test:unit": "node --test tests/pine_analyze.test.js tests/cli.test.js tests/ml_bridge.test.js tests/market_store.test.js tests/signal_state.test.js tests/risk_reward.test.js tests/ml_features.test.js",
+    "test:unit": "node --test tests/pine_analyze.test.js tests/cli.test.js tests/ml_bridge.test.js tests/market_store.test.js tests/signal_state.test.js tests/risk_reward.test.js tests/ml_features.test.js tests/trade_feedback.test.js",
     "test:cli": "node --test tests/cli.test.js",
     "model:report": "python3 -m strategy.ml.model_report",
     "test:all": "node --test tests/e2e.test.js tests/pine_analyze.test.js tests/cli.test.js tests/ml_bridge.test.js tests/market_store.test.js tests/signal_state.test.js",

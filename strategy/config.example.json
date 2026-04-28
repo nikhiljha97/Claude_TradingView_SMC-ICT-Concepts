@@ -73,6 +73,7 @@
       "minBars": 250,
       "seqLen": 32,
       "hidden": 32,
+      "cell": "lstm",
       "epochs": 3,
       "minHoursBetweenRuns": 1,
       "gprPath": "strategy/ml/data/raw/gpr/ai_gpr_data_daily.csv",

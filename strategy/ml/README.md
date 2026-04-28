@@ -57,16 +57,19 @@ python -m strategy.ml.train_baseline \
 
 This writes `strategy/ml/models/baseline.json`. Use this before training a neural net.
 
-## Train GRU / RNN
+## Train GRU / LSTM / RNN
 
 ```bash
 python -m pip install torch
 python -m strategy.ml.train_rnn \
   --input strategy/ml/data/processed/BTCUSDT_15m_2023-01-01_2024-01-01_labels.csv \
-  --seq-len 64
+  --seq-len 64 \
+  --cell lstm
 ```
 
-This writes `strategy/ml/models/rnn.pt`.
+This writes `strategy/ml/models/rnn.pt`. Use `--cell gru` for the lighter
+current architecture or `--cell lstm` for a stronger memory cell. In live
+retraining, set `"cell": "lstm"` under `ml.retrain` in `strategy/config.json`.
 
 ## Geopolitical / News Features
 
@@ -86,6 +89,21 @@ python -m strategy.ml.data_sources.news
 
 Hourly live retraining refreshes both datasets when `refreshGpr` and
 `refreshNews` are enabled in `strategy/config.json`.
+
+## Manual Outcome Feedback
+
+Telegram replies such as `TP HIT <id>` and `SL HIT <id>` become manual labels
+on the next retrain. Replies can include an exact exit price:
+
+```text
+TP HIT a3f9c1d2 216.25
+SL HIT a3f9c1d2 215.01
+```
+
+When no exit price is supplied, retraining uses the planned TP1 or SL as the
+approximate exit. The trade log stores duration, duration in 15-minute bars,
+pips/points captured, and realized R. These values are outcome metadata and
+sample-weighting material, not live input features for the same trade.
 
 ## Confluence Feature Families
 

@@ -145,10 +145,13 @@ async function processFeedback(config, weights) {
     // TP/SL feedback
     const fb = parseFeedback(msg.text);
     if (fb) {
-      const result = applyFeedback(fb.tradeId, fb.outcome, weights);
+      const result = applyFeedback(fb.tradeId, fb.outcome, weights, fb.exitPrice);
       if (result.ok) {
+        const r = Number.isFinite(result.trade.realizedR) ? result.trade.realizedR.toFixed(2) : 'n/a';
+        const mins = Number.isFinite(result.trade.durationMinutes) ? result.trade.durationMinutes.toFixed(0) : 'n/a';
+        const pips = Number.isFinite(result.trade.pipsCaptured) ? result.trade.pipsCaptured.toFixed(1) : 'n/a';
         await sendMessage(config.telegram.token, msg.chat.id,
-          `✅ Logged ${fb.outcome} HIT for \`${fb.tradeId}\` (${result.trade.symbol})\nWin rate: ${result.stats.winRate} (${result.stats.totalTrades} trades)`);
+          `✅ Logged ${fb.outcome} HIT for \`${fb.tradeId}\` (${result.trade.symbol})\nR: ${r} | pips/points: ${pips} | duration: ${mins} min\nWin rate: ${result.stats.winRate} (${result.stats.totalTrades} trades)`);
         replies.push(result);
       } else {
         await sendMessage(config.telegram.token, msg.chat.id, `⚠️ ${result.error}`);

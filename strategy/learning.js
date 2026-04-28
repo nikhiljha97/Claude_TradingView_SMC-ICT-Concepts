@@ -22,6 +22,51 @@ const WEIGHTS_FILE = path.resolve(import.meta.dirname || './', 'weights.json');
 const EWMA_ALPHA = 0.15; // smoothing factor — newer trades weighted more
 const MIN_SAMPLES_TO_ADJUST = 5; // don't adjust weights until we have data
 
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function pipSize(symbol = '') {
+  const upper = String(symbol).toUpperCase();
+  if (upper.includes('JPY')) return 0.01;
+  if (upper.includes('XAU')) return 0.1;
+  if (upper.includes('OIL')) return 0.01;
+  if (/^(NAS|SPX|US30)/.test(upper)) return 1;
+  if (upper.endsWith('USDT') || upper.includes('BTC') || upper.includes('ETH')) return 1;
+  return 0.0001;
+}
+
+export function computeOutcomeMetrics(trade, outcome, exitPrice = null, outcomeAt = new Date()) {
+  const entry = numberOrNull(trade.entry);
+  const sl = numberOrNull(trade.sl);
+  const tp = numberOrNull(trade.tp1 ?? trade.tp2);
+  const explicitExit = numberOrNull(exitPrice);
+  const fallbackExit = outcome === 'TP' ? tp : sl;
+  const finalExit = explicitExit ?? fallbackExit;
+  const sign = trade.direction === 'SELL' ? -1 : 1;
+  const risk = entry != null && sl != null ? Math.abs(entry - sl) : null;
+  const priceMove = entry != null && finalExit != null ? (finalExit - entry) * sign : null;
+  const realizedR = risk && priceMove != null ? priceMove / risk : null;
+  const size = pipSize(trade.symbol);
+  const openedAtMs = Date.parse(trade.timestamp);
+  const closedAtMs = outcomeAt instanceof Date ? outcomeAt.getTime() : Date.parse(outcomeAt);
+  const durationMinutes = Number.isFinite(openedAtMs) && Number.isFinite(closedAtMs)
+    ? Math.max(0, (closedAtMs - openedAtMs) / 60000)
+    : null;
+
+  return {
+    exitPrice: finalExit,
+    outcomePriceSource: explicitExit != null ? 'telegram_exit_price' : (fallbackExit != null ? 'planned_level' : 'unknown'),
+    priceMove,
+    pipsCaptured: priceMove != null ? priceMove / size : null,
+    realizedR,
+    durationMinutes,
+    durationBars15m: durationMinutes != null ? durationMinutes / 15 : null,
+  };
+}
+
 export function loadTrades() {
   if (!fs.existsSync(TRADES_LOG)) return [];
   try { return JSON.parse(fs.readFileSync(TRADES_LOG, 'utf8')); } catch { return []; }
@@ -129,16 +174,19 @@ export function logAlert(signal) {
 /**
  * Apply user feedback: update outcome and EWMA weights.
  */
-export function applyFeedback(tradeId, outcome, weights) {
+export function applyFeedback(tradeId, outcome, weights, exitPrice = null) {
   const trades = loadTrades();
   const trade = trades.find(t => t.tradeId === tradeId);
   if (!trade) return { ok: false, error: `Trade ${tradeId} not found.` };
   if (trade.outcome) return { ok: false, error: `Trade ${tradeId} already logged as ${trade.outcome}.` };
 
+  const outcomeAt = new Date();
+  const metrics = computeOutcomeMetrics(trade, outcome, exitPrice, outcomeAt);
   trade.outcome = outcome;
-  trade.outcomeAt = new Date().toISOString();
+  trade.outcomeAt = outcomeAt.toISOString();
   trade.confirmed = true; // TP/SL reply implies they took the trade
   trade.confirmedAt = trade.confirmedAt || trade.outcomeAt;
+  Object.assign(trade, metrics);
   saveTrades(trades);
   const win = outcome === 'TP' ? 1 : 0;
   weights.totalTrades = (weights.totalTrades || 0) + 1;

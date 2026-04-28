@@ -89,9 +89,9 @@ Local-only runtime and legacy files are intentionally ignored by Git:
 - `strategy/trades.json`, `strategy/weights.json`, `strategy/ml/data/**`, and `strategy/ml/reports/**` are local learning/runtime state.
 - `alerts_log/` and root `rules.json` are legacy local files and are not used by the current scanner.
 
-## Core ML / RNN layer
+## Core ML / Neural Layer
 
-The scanner calls a Python/PyTorch GRU sidecar after the rule-based setup is built. The model is a required neural gate:
+The scanner calls a Python/PyTorch recurrent sidecar after the rule-based setup is built. The active checkpoint can be GRU or LSTM; existing GRU checkpoints remain valid, while new retrains can be configured to train LSTM candidates. The model is a required neural gate:
 
 ```
 OHLCV history → SMC/ICT/Pivot setup → ML probability → Telegram alert
@@ -114,7 +114,7 @@ strategy/ml/data/live/<SYMBOL>_<TF>.csv
 strategy/ml/data/live/scan_signals.jsonl
 ```
 
-Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels and manual TP/SL outcomes, then trains a candidate RNN. The candidate is logged to `strategy/ml/reports/retrain_history.jsonl` and only replaces `strategy/ml/models/rnn.pt` when it meets the configured promotion metric.
+Background retraining uses the accumulated live 15-minute bars, creates TP-before-SL labels, combines them with seed labels and manual TP/SL outcomes, then trains a candidate recurrent model. Manual TP/SL feedback carries extra outcome metadata such as duration, exit price, pips/points captured, and realized R. The candidate is logged to `strategy/ml/reports/retrain_history.jsonl` and only replaces `strategy/ml/models/rnn.pt` when it meets the configured promotion metric.
 
 Runtime data and reports are ignored by Git:
 
@@ -150,6 +150,7 @@ To enable the model in `config.json`:
     "minBars": 250,
     "seqLen": 32,
     "hidden": 32,
+    "cell": "lstm",
     "epochs": 3,
     "historyPath": "strategy/ml/reports/retrain_history.jsonl",
     "promotionMetric": "utility_score",
@@ -206,9 +207,12 @@ Every alert includes a short trade ID like `a3f9c1d2`. When the trade closes:
 ```
 TP HIT a3f9c1d2     ← reply in Telegram
 SL HIT a3f9c1d2
+TP HIT a3f9c1d2 216.25  ← optional exact exit price
 ```
 
-The next scan cycle picks up the reply, marks the trade in `trades.json`, and updates EWMA edge for **every component that contributed to that signal**. Components with consistently high edge get scaled up; weak ones decay. Adjustments only kick in after 5+ samples per component.
+The next scan cycle picks up the reply, marks the trade in `trades.json`, stores outcome duration, approximate or exact exit price, pips/points captured, and realized R, then updates EWMA edge for **every component that contributed to that signal**. Components with consistently high edge get scaled up; weak ones decay. Adjustments only kick in after 5+ samples per component.
+
+Trade duration is not used as a live feature for the same signal because that would leak future information. It is stored as outcome metadata and used in retraining/evaluation so the model can learn which historical setup types resolved efficiently versus slowly or poorly.
 
 ### Telegram commands
 - `/stats` — current win-rate + per-component edge
@@ -221,4 +225,4 @@ The next scan cycle picks up the reply, marks the trade in `trades.json`, and up
 - The minimum 1:2.5 RR is enforced *before* alerts fire — sub-RR setups are silently skipped.
 - XAUUSD is auto-skipped Friday 17:00 → Sunday 18:00 local time.
 - The Telegram token in `config.json` is a secret. Don't commit it. Rotate via @BotFather if it leaks.
-- The "reinforcement learning" here is intentionally simple (EWMA on per-component win rate) — not deep RL. It nudges weights, doesn't rewrite the strategy. Works because it tracks marginal edge of each signal feature with no overfitting risk.
+- The "reinforcement learning" here is intentionally simple (EWMA on per-component win rate) — not deep RL. It nudges weights immediately, while the neural model retrains separately from accumulated bars and closed-trade outcomes.

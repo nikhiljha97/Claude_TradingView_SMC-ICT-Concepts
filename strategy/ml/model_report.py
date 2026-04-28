@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize the active RNN checkpoint and recent promotion history."""
+"""Summarize the active recurrent checkpoint and recent promotion history."""
 
 from __future__ import annotations
 
@@ -65,8 +65,8 @@ def fmt(value, digits: int = 4) -> str:
 def print_report(model: dict, history: list[dict]) -> None:
     metrics = model.get("metrics") or {}
     features = model.get("features") or []
-    print("Active RNN model")
-    print("================")
+    print("Active neural model")
+    print("===================")
     print(f"type: {model.get('type', 'unknown')}")
     print(f"features: {len(features)}")
     print(f"seq_len: {model.get('seq_len', 'n/a')}")

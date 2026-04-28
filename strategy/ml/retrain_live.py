@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Retrain the PyTorch GRU from accumulated scanner OHLCV captures."""
+"""Retrain the PyTorch recurrent model from accumulated scanner OHLCV captures."""
 
 from __future__ import annotations
 
@@ -21,6 +21,32 @@ from strategy.ml.common import PROCESSED_DIR, ensure_dirs, read_bars, write_rows
 from strategy.ml.features import build_features, load_gpr, load_news
 from strategy.ml.labels import LABEL_FIELDS, label_rows
 from strategy.ml.train_rnn import train_model
+
+
+def parse_iso_ms(value) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp() * 1000)
+    except Exception:
+        return None
+
+
+def manual_sample_weight(trade: dict) -> float:
+    """Give closed real trades a modest extra voice without letting a few samples dominate."""
+    weight = 1.5
+    try:
+        realized_r = abs(float(trade.get("realizedR") or 0))
+        weight += min(realized_r, 3.0) * 0.25
+    except (TypeError, ValueError):
+        pass
+    try:
+        bars = float(trade.get("durationBars15m") or 0)
+        if bars > 0:
+            weight += min(0.5, 8.0 / max(8.0, bars) * 0.5)
+    except (TypeError, ValueError):
+        pass
+    return round(min(weight, 3.0), 4)
 
 
 def count_rows(path: Path) -> int:
@@ -62,16 +88,14 @@ def trade_outcome_rows(trade_log: str | None, live_dir: Path, gpr=None, news=Non
         features = features_by_symbol.get(symbol) or []
         if not features:
             continue
-        try:
-            trade_ts = int(__import__("datetime").datetime.fromisoformat(trade["timestamp"].replace("Z", "+00:00")).timestamp() * 1000)
-        except Exception:
-            trade_ts = None
+        trade_ts = parse_iso_ms(trade.get("timestamp"))
         feat = None
         if trade_ts is not None:
             candidates = [row for row in features if int(row["timestamp"]) <= trade_ts]
             feat = candidates[-1] if candidates else None
         feat = feat or features[-1]
         side = "long" if direction == "BUY" else "short"
+        duration_bars = trade.get("durationBars15m")
         rows.append({
             **feat,
             "side_long": 1.0 if side == "long" else 0.0,
@@ -81,7 +105,12 @@ def trade_outcome_rows(trade_log: str | None, live_dir: Path, gpr=None, news=Non
             "sl": trade.get("sl") or "",
             "horizon": "manual",
             "label": 1 if outcome == "TP" else 0,
-            "bars_to_event": "",
+            "bars_to_event": duration_bars or "",
+            "exit_price": trade.get("exitPrice") or "",
+            "realized_r": trade.get("realizedR") or "",
+            "duration_minutes": trade.get("durationMinutes") or "",
+            "duration_bars_15m": duration_bars or "",
+            "sample_weight": manual_sample_weight(trade),
         })
     return rows
 
@@ -166,6 +195,7 @@ def main() -> None:
     parser.add_argument("--min-bars", type=int, default=250)
     parser.add_argument("--seq-len", type=int, default=32)
     parser.add_argument("--hidden", type=int, default=32)
+    parser.add_argument("--cell", choices=("gru", "lstm"), default="gru")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--lock", default=None)
@@ -227,6 +257,7 @@ def main() -> None:
             str(combined),
             seq_len=args.seq_len,
             hidden=args.hidden,
+            cell=args.cell,
             epochs=args.epochs,
             batch_size=args.batch_size,
             out_path=str(candidate_path),

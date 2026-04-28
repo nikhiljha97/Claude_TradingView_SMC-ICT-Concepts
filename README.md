@@ -3,7 +3,7 @@
 This repository has two connected parts:
 
 1. **TradingView MCP Bridge** - a local bridge that lets an AI assistant or CLI interact with your running TradingView Desktop app through Chrome DevTools Protocol.
-2. **Local Trading Scanner** - a 15-minute signal scanner that reads your own TradingView chart, evaluates configured markets, applies rule-based confluence, gates signals through a PyTorch GRU/RNN, sends Telegram alerts, records outcomes, and retrains locally.
+2. **Local Trading Scanner** - a 15-minute signal scanner that reads your own TradingView chart, evaluates configured markets, applies rule-based confluence, gates signals through a PyTorch GRU/LSTM recurrent model, sends Telegram alerts, records outcomes, and retrains locally.
 
 Plain English version: this system watches your charts on your laptop, checks whether a trade setup is good enough, asks a neural model for confirmation, and messages you on Telegram. It does **not** place trades for you.
 
@@ -24,7 +24,7 @@ The live local scanner is designed to run on macOS through `launchd`.
 - Watchlists: weekday and weekend markets from `strategy/config.json`
 - Alerts: Telegram messages only when all gates pass
 - Risk filter: minimum actual risk/reward of `1:2.5`
-- ML gate: required PyTorch GRU/RNN using 76 engineered features
+- ML gate: required PyTorch recurrent model using 76 engineered features; GRU checkpoints remain supported and LSTM retrains can be enabled
 - Learning loop: live OHLCV storage, Telegram feedback, hourly retraining, model promotion ledger
 - Safety: no broker connection, no order placement, no automatic execution
 
@@ -48,7 +48,7 @@ For a software engineer:
 
 For a data scientist:
 
-- The active neural gate is a PyTorch GRU.
+- The active neural gate is a PyTorch recurrent model, currently GRU unless an LSTM candidate has been promoted.
 - The model receives price/volume, SMC/ICT, auction, geopolitical/news, side, and confluence features.
 - Retraining writes candidate models first.
 - Candidate promotion uses a utility score, not plain accuracy, to avoid majority-class models that simply predict "no TP".
@@ -75,7 +75,7 @@ Rule engine: SMC + ICT + pivots + auction logic
 Risk, continuity, and duplicate-suppression checks
         |
         v
-PyTorch GRU/RNN probability gate
+PyTorch GRU/LSTM probability gate
         |
         v
 Telegram alert, only if the setup remains valid
@@ -112,7 +112,7 @@ Neural feature families include:
 | Geopolitical/news | AI-GPR, oil/non-oil risk, RSS/GDELT headline pressure |
 | Side | long/short encoding |
 
-The current active RNN has `76` features. Check your exact live model with:
+The current active neural model has `76` features. Check your exact live model with:
 
 ```bash
 npm run model:report
@@ -134,7 +134,7 @@ Retraining process:
 1. Build labels from live 15-minute bars.
 2. Add manual TP/SL outcomes from Telegram replies.
 3. Add seed labels when configured.
-4. Train a candidate GRU checkpoint.
+4. Train a candidate GRU or LSTM checkpoint.
 5. Compare candidate metrics against the active checkpoint.
 6. Promote only if the candidate passes the configured promotion metric.
 
@@ -160,7 +160,12 @@ YES abc123
 NO abc123
 TP HIT abc123
 SL HIT abc123
+TP HIT abc123 216.25
 ```
+
+The optional number is the exact exit price. If you omit it, the system uses
+the planned TP1 or SL as the approximate exit. Closed trades store duration,
+pips/points captured, and realized R for retraining/evaluation.
 
 Commands:
 
@@ -181,7 +186,7 @@ Commands:
 | `strategy/scanner.js` | Main 15-minute scanner |
 | `strategy/analyzer.js` | Rule engine and interpretable confluence |
 | `strategy/ml/features.py` | ML feature engineering |
-| `strategy/ml/train_rnn.py` | PyTorch GRU training |
+| `strategy/ml/train_rnn.py` | PyTorch GRU/LSTM training |
 | `strategy/ml/retrain_live.py` | Live retraining and model promotion |
 | `strategy/ml/model_report.py` | Active model and retrain-history report |
 | `strategy/ml/models/rnn.pt` | Active PyTorch checkpoint |
