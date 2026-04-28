@@ -4,11 +4,13 @@ indicator("NeuroTrader Structure Companion Compact", overlay=true, max_lines_cou
 groupS = "Structure"
 pLen = input.int(3, "Fractal pivot length", minval=2, maxval=10, group=groupS)
 sweepWin = input.int(20, "Sweep lookback", minval=5, maxval=80, group=groupS)
-showSw = input.bool(true, "Show HH/LH/HL/LL", group=groupS)
+showSw = input.bool(false, "Debug: show HH/LH/HL/LL", group=groupS)
+showSweeps = input.bool(false, "Debug: show all sweeps", group=groupS)
 showBr = input.bool(true, "Show BOS/CHOCH/MSS", group=groupS)
 showCisd = input.bool(true, "Show CISD", group=groupS)
 cisdMult = input.float(1.25, "CISD body multiplier", minval=0.5, maxval=5, step=0.05, group=groupS)
 cisdLen = input.int(10, "CISD avg body lookback", minval=3, maxval=50, group=groupS)
+eventGap = input.int(8, "Minimum bars between event labels", minval=0, maxval=50, group=groupS)
 
 groupF = "Fib / OTE"
 showOte = input.bool(true, "Show OTE", group=groupF)
@@ -31,6 +33,7 @@ var int brokenL = na
 var int bullSweepBar = na
 var int bearSweepBar = na
 var int trend = 0
+var int lastEventBar = na
 var box oteBox = na
 var line f618 = na
 var line f705 = na
@@ -39,7 +42,10 @@ var line f127 = na
 var line f1618 = na
 
 lab(x, y, t, st, bg, tc) =>
-    label.new(x, y, t, style=st, color=bg, textcolor=tc, size=size.tiny)
+    label.new(x, y, t, style=st, color=bg, textcolor=tc, size=size.small)
+
+canPrintEvent() =>
+    na(lastEventBar) or bar_index - lastEventBar >= eventGap
 
 delFib() =>
     if not na(oteBox)
@@ -76,10 +82,12 @@ sweepBull = not na(ll) and low < ll and close > ll
 sweepBear = not na(lh) and high > lh and close < lh
 if sweepBull
     bullSweepBar := bar_index
-    lab(bar_index, low, "SSL sweep", label.style_label_up, color.new(bull, 0), color.black)
+    if showSweeps
+        lab(bar_index, low, "SSL", label.style_label_up, color.new(bull, 15), color.black)
 if sweepBear
     bearSweepBar := bar_index
-    lab(bar_index, high, "BSL sweep", label.style_label_down, color.new(bear, 0), color.white)
+    if showSweeps
+        lab(bar_index, high, "BSL", label.style_label_down, color.new(bear, 15), color.white)
 
 avgBody = ta.sma(math.abs(close - open), cisdLen)
 bigBody = not na(avgBody) and math.abs(close - open) > avgBody * cisdMult
@@ -87,10 +95,12 @@ recentBullSweep = not na(bullSweepBar) and bar_index - bullSweepBar <= sweepWin
 recentBearSweep = not na(bearSweepBar) and bar_index - bearSweepBar <= sweepWin
 bullCisd = recentBullSweep and close > math.max(open[1], close[1]) and close > open and bigBody
 bearCisd = recentBearSweep and close < math.min(open[1], close[1]) and close < open and bigBody
-if showCisd and bullCisd
+if showCisd and bullCisd and canPrintEvent()
     lab(bar_index, low, "CISD UP", label.style_label_up, color.new(violet, 0), color.white)
-if showCisd and bearCisd
+    lastEventBar := bar_index
+if showCisd and bearCisd and canPrintEvent()
     lab(bar_index, high, "CISD DN", label.style_label_down, color.new(violet, 0), color.white)
+    lastEventBar := bar_index
 
 breakH = not na(lh) and close > lh and brokenH != lhBar
 breakL = not na(ll) and close < ll and brokenL != llBar
@@ -98,16 +108,18 @@ if breakH
     brokenH := lhBar
     txt = recentBullSweep ? "MSS UP" : trend < 0 ? "CHOCH UP" : "BOS UP"
     trend := 1
-    if showBr
+    if showBr and txt != "BOS UP" and canPrintEvent()
         line.new(lhBar, lh, bar_index, lh, color=bull, width=2)
         lab(bar_index, close, txt, label.style_label_up, color.new(bull, 0), color.black)
+        lastEventBar := bar_index
 if breakL
     brokenL := llBar
     txt = recentBearSweep ? "MSS DN" : trend > 0 ? "CHOCH DN" : "BOS DN"
     trend := -1
-    if showBr
+    if showBr and txt != "BOS DN" and canPrintEvent()
         line.new(llBar, ll, bar_index, ll, color=bear, width=2)
         lab(bar_index, close, txt, label.style_label_down, color.new(bear, 0), color.white)
+        lastEventBar := bar_index
 
 bullLeg = not na(ll) and not na(lh) and llBar < lhBar
 bearLeg = not na(ll) and not na(lh) and lhBar < llBar
