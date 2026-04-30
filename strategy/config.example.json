@@ -2,7 +2,12 @@
   "telegram": {
     "token": "YOUR_TELEGRAM_BOT_TOKEN",
     "chat_id": null,
-    "last_update_id": 0
+    "last_update_id": 0,
+    "alertPause": {
+      "enabled": false,
+      "until": "2026-05-20T23:59:59-04:00",
+      "reason": "temporary_manual_pause"
+    }
   },
   "weekdayPairs": [
     {

@@ -168,6 +168,19 @@ function getNoTradeStatus(config, now = new Date()) {
   return { active: false };
 }
 
+function getTelegramAlertPauseStatus(config, now = new Date()) {
+  const pause = config.telegram?.alertPause || config.strategy?.telegramAlertPause;
+  if (!pause?.enabled) return { active: false };
+  const until = new Date(pause.until);
+  if (Number.isNaN(until.getTime())) return { active: false };
+  if (now.getTime() >= until.getTime()) return { active: false };
+  return {
+    active: true,
+    until: until.toISOString(),
+    reason: pause.reason || 'telegram_alert_pause',
+  };
+}
+
 function defaultAlertSessions() {
   return [
     {
@@ -364,6 +377,7 @@ async function scoreDirectionalProbe(config, payload, direction) {
 async function scanSymbol(pair, config, weights) {
   console.log(`[scanner] Scanning ${pair.symbol}...`);
   const noTrade = getNoTradeStatus(config);
+  const alertPause = getTelegramAlertPauseStatus(config);
   const requestedSymbol = configuredSymbol(pair);
   await setSymbol(requestedSymbol);
   const resolvedSymbol = await getChartSymbol().catch(() => null);
@@ -450,6 +464,7 @@ async function scanSymbol(pair, config, weights) {
   signal.details.continuity = continuity;
   signal.details.noTradeWindow = noTrade;
   signal.details.alertSession = alertSession;
+  signal.details.telegramAlertPause = alertPause;
   if (signal.direction !== 'NONE' && !continuity.allow) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${continuity.reason}`);
   }
@@ -459,10 +474,14 @@ async function scanSymbol(pair, config, weights) {
   if (signal.direction !== 'NONE' && !alertSession.allow) {
     console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: ${alertSession.reason}`);
   }
+  if (signal.direction !== 'NONE' && alertPause.active) {
+    console.log(`[scanner] Suppressed ${pair.symbol} ${signal.direction}: telegram_alert_pause until ${alertPause.until}`);
+  }
 
   if (signal.score >= config.strategy.alertScoreThreshold &&
       signal.rr >= config.strategy.minRR &&
       !noTrade.active &&
+      !alertPause.active &&
       alertSession.allow &&
       continuity.allow) {
     signal.tradeId = genTradeId();
@@ -493,6 +512,9 @@ async function scanSymbol(pair, config, weights) {
   }
   if (!alertSession.allow) {
     reasons.push(`ICT session ${alertSession.reason}`);
+  }
+  if (alertPause.active) {
+    reasons.push(`Telegram alert pause until ${alertPause.until}`);
   }
   console.log(`[scanner] No alert for ${pair.symbol} ${signal.direction}: ${reasons.join(', ')}`);
   return null;
@@ -528,6 +550,10 @@ async function main() {
   const noTrade = getNoTradeStatus(config);
   if (noTrade.active) {
     console.log(`[scanner] No-trade window active: ${noTrade.start}-${noTrade.end} ${noTrade.timezone}. Scans/data capture continue; new trade alerts are suppressed.`);
+  }
+  const alertPause = getTelegramAlertPauseStatus(config);
+  if (alertPause.active) {
+    console.log(`[scanner] Telegram trade alerts paused until ${alertPause.until}. Scans/data capture/retraining continue.`);
   }
   const activeSessions = (config.strategy?.alertSessions || defaultAlertSessions()).filter(session => sessionIsActive(session));
   if (activeSessions.length) {
